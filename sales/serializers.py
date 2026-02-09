@@ -13,6 +13,7 @@ class SaleItemSerializer(serializers.ModelSerializer):
 
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True)
+    transaction_id = serializers.CharField(required=False)
 
     class Meta:
         model = Sale
