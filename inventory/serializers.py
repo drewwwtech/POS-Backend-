@@ -18,22 +18,20 @@ class StockLogSerializer(serializers.ModelSerializer):
 
 # 2. New Serializer for the "Stock In" action
 class RestockSerializer(serializers.Serializer):
-    product_id = serializers.IntegerField()
+    # Change this to CharField because SKUs can be strings or barcodes
+    sku = serializers.CharField() 
     quantity_added = serializers.IntegerField(min_value=1)
     notes = serializers.CharField(required=False, allow_blank=True)
 
     def save(self):
         try:
-            # We look for the product. If it's not found, it triggers the except block.
-            product = Product.objects.get(id=self.validated_data['product_id'])
+            # Now we look for the product by its SKU
+            product = Product.objects.get(sku=self.validated_data['sku'])
             quantity = self.validated_data['quantity_added']
             
-            # Update stock
             product.stock_quantity += quantity
-            # This .save() triggers our pre_save signal in models.py 
-            # which automatically creates the StockLog!
-            product.save()
+            product.save() # Triggers your signal for the log
 
             return product
         except Product.DoesNotExist:
-            raise serializers.ValidationError({"product_id": "That product ID does not exist."})
+            raise serializers.ValidationError({"sku": "Product with this SKU/Barcode not found."})

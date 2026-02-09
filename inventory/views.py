@@ -17,18 +17,16 @@ class ProductListAPI(generics.ListAPIView):
 
 class RestockAPIView(APIView):
     def post(self, request):
-        # Pass the data to the serializer
         serializer = RestockSerializer(data=request.data)
         
-        # This check prevents the "Yellow Screen" crash
         if serializer.is_valid():
             product = serializer.save()
             return Response({
                 "status": "success",
-                "current_stock": product.stock_quantity
+                "message": f"Successfully restocked {product.name} (SKU: {product.sku})",
+                "new_total_stock": product.stock_quantity
             }, status=status.HTTP_200_OK)
         
-        # If the ID is wrong, it returns the error from image_4f2c56.png instead of crashing
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # 3. NEW: The History API
