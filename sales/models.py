@@ -1,5 +1,5 @@
-from django.db import models
-from inventory.models import Product, StockLog # Kept for reference
+from django.db import models, transaction  # Added transaction
+from inventory.models import Product, StockLog
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.core.mail import send_mail
@@ -32,33 +32,33 @@ def fetch_unit_price(sender, instance, **kwargs):
 @receiver(post_save, sender=SaleItem)
 def process_sale_item(sender, instance, created, **kwargs):
     if created:
-        # 1. Automate Stock Deduction
-        product = instance.product
-        product.stock_quantity -= instance.quantity
-        
-        # --- CRITICAL CHANGE ---
-        # This product.save() will now trigger the track_stock_changes 
-        # signal in inventory/models.py, which creates the log for us.
-        product.save() 
+        # Wrap the entire operation in an atomic transaction
+        # This ensures that if the stock deduction OR the total update fails,
+        # the database rolls back to the state before the sale started.
+        with transaction.atomic():
+            # 1. Automate Stock Deduction
+            product = instance.product
+            product.stock_quantity -= instance.quantity
+            
+            # This triggers the track_stock_changes signal in inventory/models.py
+            product.save() 
 
-        # 2. Update the Parent Sale Total
-        sale = instance.sale
-        sale.refresh_from_db()
-        
-        item_total = Decimal(str(instance.unit_price)) * Decimal(str(instance.quantity))
-        new_total = Decimal(str(sale.total_amount)) + item_total
-        
-        Sale.objects.filter(id=sale.id).update(total_amount=new_total)
+            # 2. Update the Parent Sale Total
+            sale = instance.sale
+            sale.refresh_from_db()
+            
+            item_total = Decimal(str(instance.unit_price)) * Decimal(str(instance.quantity))
+            new_total = Decimal(str(sale.total_amount)) + item_total
+            
+            # Use filter().update() to update the DB directly without re-triggering signals
+            Sale.objects.filter(id=sale.id).update(total_amount=new_total)
 
-        # 3. Low Stock Alert (Threshold: 10)
-        if product.stock_quantity < 10:
-            send_mail(
-                subject=f'⚠️ LOW STOCK ALERT: {product.name}',
-                message=f'Product {product.name} is low. Current stock: {product.stock_quantity}.',
-                from_email='alerts@modernpos.com',
-                recipient_list=['admin@yourshop.com'],
-                fail_silently=True,
-            )
-        
-        # --- REMOVED SECTION 4 (Audit Trail) ---
-        # The StockLog creation was removed from here to prevent double-logging.
+            # 3. Low Stock Alert (Threshold: 10)
+            if product.stock_quantity < 10:
+                send_mail(
+                    subject=f'⚠️ LOW STOCK ALERT: {product.name}',
+                    message=f'Product {product.name} is low. Current stock: {product.stock_quantity}.',
+                    from_email='alerts@modernpos.com',
+                    recipient_list=['admin@yourshop.com'],
+                    fail_silently=True,
+                )
