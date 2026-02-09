@@ -118,3 +118,53 @@ def generate_receipt(request, transaction_id):
     p.showPage()
     p.save()
     return response # FIXED: Now returns the PDF file
+
+def generate_daily_report_pdf(request):
+    """Generates a PDF of all sales made today"""
+    today = timezone.now().date()
+    sales_today = Sale.objects.filter(timestamp__date=today).order_by('timestamp')
+    
+    if not sales_today.exists():
+        return HttpResponse("No sales recorded for today.", status=404)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Daily_Sales_{today}.pdf"'
+    
+    p = canvas.Canvas(response)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(100, 800, f"JMC STORE - DAILY SALES REPORT")
+    
+    p.setFont("Helvetica", 12)
+    p.drawString(100, 780, f"Date: {today}")
+    p.line(100, 770, 500, 770)
+    
+    y = 750
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(100, y, "Time")
+    p.drawString(180, y, "Transaction ID")
+    p.drawString(350, y, "Amount")
+    y -= 20
+    p.setFont("Helvetica", 10)
+
+    total_revenue = 0
+    for sale in sales_today:
+        # If we run out of page space, start a new one (basic check)
+        if y < 50:
+            p.showPage()
+            y = 800
+            
+        p.drawString(100, y, sale.timestamp.strftime('%H:%M'))
+        p.drawString(180, y, sale.transaction_id)
+        p.drawString(350, y, f"PHP {sale.total_amount}")
+        total_revenue += sale.total_amount
+        y -= 15
+        
+    p.line(100, y, 500, y)
+    y -= 20
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, f"TOTAL DAILY REVENUE: PHP {total_revenue}")
+    p.drawString(100, y-15, f"TOTAL TRANSACTIONS: {sales_today.count()}")
+    
+    p.showPage()
+    p.save()
+    return response

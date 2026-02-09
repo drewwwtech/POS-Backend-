@@ -4,7 +4,8 @@ from .views import (
     DashboardSummaryAPI, 
     DailyClosingReportAPI, 
     ReceiptDetailView, 
-    generate_receipt
+    generate_receipt,
+    generate_daily_report_pdf
 )
 
 urlpatterns = [
@@ -22,4 +23,6 @@ urlpatterns = [
 
     # 5. PDF Download: /api/sales/receipt/pdf/ATOMICTEST/
     path('receipt/pdf/<str:transaction_id>/', generate_receipt, name='receipt-pdf'),
+
+    path('daily-report/pdf/', generate_daily_report_pdf, name='daily-report-pdf'),
 ]
