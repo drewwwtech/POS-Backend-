@@ -1,3 +1,4 @@
+from itertools import product
 from django.db import models, transaction  # Added transaction
 from inventory.models import Product, StockLog
 from django.db.models.signals import post_save, pre_save
@@ -38,6 +39,9 @@ def process_sale_item(sender, instance, created, **kwargs):
         # the database rolls back to the state before the sale started.
         if not instance.product.is_active:
             raise ValidationError(f"Cannot sell {instance.product.name} because it is inactive.")
+        
+        if instance.product.stock_quantity < instance.quantity:
+            raise ValidationError(f"Insufficient stock for {instance.product.name}")
 
         with transaction.atomic():
             # 1. Automate Stock Deduction
