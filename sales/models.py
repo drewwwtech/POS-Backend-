@@ -4,6 +4,7 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.core.mail import send_mail
 from decimal import Decimal
+from django.core.exceptions import ValidationError
 
 class Sale(models.Model):
     transaction_id = models.CharField(max_length=100, unique=True)
@@ -35,6 +36,9 @@ def process_sale_item(sender, instance, created, **kwargs):
         # Wrap the entire operation in an atomic transaction
         # This ensures that if the stock deduction OR the total update fails,
         # the database rolls back to the state before the sale started.
+        if not instance.product.is_active:
+            raise ValidationError(f"Cannot sell {instance.product.name} because it is inactive.")
+
         with transaction.atomic():
             # 1. Automate Stock Deduction
             product = instance.product
