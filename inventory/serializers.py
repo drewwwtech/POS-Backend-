@@ -23,19 +23,17 @@ class RestockSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
 
     def save(self):
-        # Using .get() ensures we are targeting the right product
-        product = Product.objects.get(id=self.validated_data['product_id'])
-        quantity = self.validated_data['quantity_added']
-        
-        # Logic for "Stock In"
-        product.stock_quantity += quantity
-        product.save()
+        try:
+            # We look for the product. If it's not found, it triggers the except block.
+            product = Product.objects.get(id=self.validated_data['product_id'])
+            quantity = self.validated_data['quantity_added']
+            
+            # Update stock
+            product.stock_quantity += quantity
+            # This .save() triggers our pre_save signal in models.py 
+            # which automatically creates the StockLog!
+            product.save()
 
-        # Create the Log entry for the Addition
-        return StockLog.objects.create(
-            product=product,
-            change_amount=quantity, 
-            current_stock=product.stock_quantity,
-            type='RESTOCK',
-            notes=self.validated_data.get('notes', 'Manual Restock')
-        )
+            return product
+        except Product.DoesNotExist:
+            raise serializers.ValidationError({"product_id": "That product ID does not exist."})

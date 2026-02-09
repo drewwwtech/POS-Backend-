@@ -13,22 +13,22 @@ class ProductListAPI(generics.ListAPIView):
     search_fields = ['name', 'sku'] # Scanner will type into this field
 
 # 2. NEW: The "Stock In" API
+# inventory/views.py
+
 class RestockAPIView(APIView):
-    """
-    Endpoint to add stock. 
-    In the future, you just scan the SKU and send it here with the quantity.
-    """
     def post(self, request):
+        # Pass the data to the serializer
         serializer = RestockSerializer(data=request.data)
+        
+        # This check prevents the "Yellow Screen" crash
         if serializer.is_valid():
-            # The serializer.save() handles the math and the logging
-            log_entry = serializer.save()
+            product = serializer.save()
             return Response({
                 "status": "success",
-                "product": log_entry.product.name,
-                "added": log_entry.change_amount,
-                "new_total": log_entry.current_stock
-            }, status=status.HTTP_201_CREATED)
+                "current_stock": product.stock_quantity
+            }, status=status.HTTP_200_OK)
+        
+        # If the ID is wrong, it returns the error from image_4f2c56.png instead of crashing
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # 3. NEW: The History API

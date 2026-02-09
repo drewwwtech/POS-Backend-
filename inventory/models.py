@@ -48,28 +48,30 @@ class StockLog(models.Model):
 
 @receiver(pre_save, sender=Product)
 def track_stock_changes(sender, instance, **kwargs):
-    # If the product already exists (it has a primary key)
     if instance.pk:
         try:
+            # We get the 'old' version from the database before it's saved
             old_product = Product.objects.get(pk=instance.pk)
-            # Check if the stock quantity has actually changed
+            
             if old_product.stock_quantity != instance.stock_quantity:
                 diff = instance.stock_quantity - old_product.stock_quantity
                 
-                # Determine type based on the change
+                # Logic for "Stock In" vs "Stock Out"
                 if diff > 0:
                     log_type = 'RESTOCK'
+                    note_detail = "Stock increased (Restock/In)"
                 else:
-                    # We check if this change is coming from a sale later
-                    # but by default, manual changes are 'ADJUST'
-                    log_type = 'ADJUST'
+                    # If it's coming from your Sales signal, it's a SALE. 
+                    # For now, we'll label negative changes as SALE.
+                    log_type = 'SALE'
+                    note_detail = "Stock decreased (Sale/Out)"
 
                 StockLog.objects.create(
                     product=instance,
                     change_amount=diff,
                     current_stock=instance.stock_quantity,
                     type=log_type,
-                    notes="System: Manual stock change detected."
+                    notes=f"System: {note_detail}"
                 )
         except Product.DoesNotExist:
             pass
