@@ -7,9 +7,16 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'sku', 'price', 'stock_quantity', 'category')
+    list_display = ('name', 'sku', 'stock_quantity', 'price', 'is_active')
     search_fields = ('name', 'sku')
-    list_filter = ('category',)
+    list_filter = ('is_active', 'category')
+    actions = ['deactivate_products', 'activate_products']
+
+    def deactivate_products(self, request, queryset):
+        queryset.update(is_active=False)
+    
+    def activate_products(self, request, queryset):
+        queryset.update(is_active=True)
 
 @admin.register(StockLog)
 class StockLogAdmin(admin.ModelAdmin):

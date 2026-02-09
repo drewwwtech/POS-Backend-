@@ -25,13 +25,16 @@ class RestockSerializer(serializers.Serializer):
 
     def save(self):
         try:
-            # Now we look for the product by its SKU
-            product = Product.objects.get(sku=self.validated_data['sku'])
+            # We add is_active=True here to "lock" the product from the API
+            product = Product.objects.get(sku=self.validated_data['sku'], is_active=True)
             quantity = self.validated_data['quantity_added']
             
             product.stock_quantity += quantity
-            product.save() # Triggers your signal for the log
+            product.save() 
 
             return product
         except Product.DoesNotExist:
-            raise serializers.ValidationError({"sku": "Product with this SKU/Barcode not found."})
+            # If the product is inactive, .get() will fail and come here
+            raise serializers.ValidationError({
+                "sku": "This product is inactive or does not exist."
+            })
