@@ -1,8 +1,9 @@
 from django.db import models
 from inventory.models import Product
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from django.core.mail import send_mail  # Required for alerts
+from django.core.mail import send_mail
+from decimal import Decimal
 
 class Sale(models.Model):
     transaction_id = models.CharField(max_length=100, unique=True)
@@ -16,11 +17,18 @@ class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2) 
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True) 
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"
 
+# --- FIX 1: Fetch price BEFORE saving to avoid "save loops" ---
+@receiver(pre_save, sender=SaleItem)
+def fetch_unit_price(sender, instance, **kwargs):
+    if not instance.unit_price:
+        instance.unit_price = instance.product.price
+
+# --- FIX 2: Process stock and totals AFTER saving ---
 @receiver(post_save, sender=SaleItem)
 def process_sale_item(sender, instance, created, **kwargs):
     if created:
@@ -29,25 +37,25 @@ def process_sale_item(sender, instance, created, **kwargs):
         product.stock_quantity -= instance.quantity
         product.save()
 
-        # 2. Automate Price Fetching
-        if not instance.unit_price:
-            instance.unit_price = product.price
-            instance.save()
-
-        # 3. Update the Parent Sale Total
+        # 2. Update the Parent Sale Total
         sale = instance.sale
-        sale.total_amount += (instance.unit_price * instance.quantity)
-        sale.save()
+        
+        # We refresh to make sure we have the latest total_amount from the DB
+        sale.refresh_from_db()
+        
+        # Calculation using high-precision Decimal
+        item_total = Decimal(str(instance.unit_price)) * Decimal(str(instance.quantity))
+        new_total = Decimal(str(sale.total_amount)) + item_total
+        
+        # Silent update to prevent infinite loops
+        Sale.objects.filter(id=sale.id).update(total_amount=new_total)
 
-        # 4. Modern POS Feature: Low Stock Alert
-        # We set the threshold to 50 so you can test it with your current Sprite stock
-        if product.stock_quantity < 50:
+        # 3. Low Stock Alert (Threshold: 10)
+        if product.stock_quantity < 10:
             send_mail(
                 subject=f'⚠️ LOW STOCK ALERT: {product.name}',
-                message=f'The product {product.name} (SKU: {product.sku}) is running low.\n'
-                        f'Current stock level: {product.stock_quantity}.\n'
-                        f'Please restock this item in the Inventory app.',
+                message=f'Product {product.name} is low. Current stock: {product.stock_quantity}.',
                 from_email='alerts@modernpos.com',
-                recipient_list=['admin@yourshop.com'], # You can put your real email here
-                fail_silently=False,
+                recipient_list=['admin@yourshop.com'],
+                fail_silently=True,
             )

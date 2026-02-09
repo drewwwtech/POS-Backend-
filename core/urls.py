@@ -19,6 +19,6 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('inventory/', include('inventory.urls')), # This connects everything
-    path('sales/', include('sales.urls')),
+    path('api/inventory/', include('inventory.urls')),
+    path('api/sales/', include('sales.urls')), # This points to the file above
 ]

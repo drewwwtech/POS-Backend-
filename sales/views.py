@@ -8,10 +8,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from reportlab.pdfgen import canvas
 
 from .models import Sale, SaleItem
+from inventory.models import Product # Import added
 from .serializers import SaleSerializer
 
 # 1. Main Transaction API
-# Handles listing history, creating new sales, and filtering by date/ID
 class SaleListAPI(generics.ListCreateAPIView): 
     queryset = Sale.objects.all().order_by('-timestamp')
     serializer_class = SaleSerializer
@@ -20,7 +20,6 @@ class SaleListAPI(generics.ListCreateAPIView):
     search_fields = ['transaction_id']
 
 # 2. Modern Dashboard API
-# Provides business intelligence and stock alerts
 class DashboardSummaryAPI(APIView):
     def get(self, request):
         total_revenue = Sale.objects.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
@@ -30,13 +29,10 @@ class DashboardSummaryAPI(APIView):
             total_qty=Sum('quantity')
         ).order_by('-total_qty').first()
 
-        # Alert if stock is below 10 units
-        low_stock_items = SaleItem.objects.filter(
-            product__stock_quantity__lt=10
-        ).values(
-            'product__name', 
-            'product__stock_quantity'
-        ).distinct()
+        # STRICT FIX: Check real Inventory levels, not just Sales history
+        low_stock_items = Product.objects.filter(
+            stock_quantity__lt=10
+        ).values('name', 'stock_quantity')
 
         return Response({
             "business_health": {
@@ -48,13 +44,12 @@ class DashboardSummaryAPI(APIView):
                 "top_selling_product": top_product['product__name'] if top_product else "None",
             },
             "inventory_alerts": {
-                "low_stock_count": len(low_stock_items),
+                "low_stock_count": low_stock_items.count(),
                 "items_to_restock": list(low_stock_items)
             }
         })
 
-# 3. Daily Closing Report API (New "Z-Report" Logic)
-# Summarizes sales specifically for the current day
+# 3. Daily Closing Report API
 class DailyClosingReportAPI(APIView):
     def get(self, request):
         today = timezone.now().date()
@@ -75,7 +70,10 @@ class DailyClosingReportAPI(APIView):
 
 # 4. Receipt Generator
 def generate_receipt(request, transaction_id):
-    sale = Sale.objects.get(transaction_id=transaction_id)
+    try:
+        sale = Sale.objects.get(transaction_id=transaction_id)
+    except Sale.DoesNotExist:
+        return HttpResponse("Sale not found", status=404)
     
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="receipt_{transaction_id}.pdf"'
