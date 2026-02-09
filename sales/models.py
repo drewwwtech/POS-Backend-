@@ -4,6 +4,7 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.core.mail import send_mail
 from decimal import Decimal
+from inventory.models import StockLog
 
 class Sale(models.Model):
     transaction_id = models.CharField(max_length=100, unique=True)
@@ -59,3 +60,12 @@ def process_sale_item(sender, instance, created, **kwargs):
                 recipient_list=['admin@yourshop.com'],
                 fail_silently=True,
             )
+        
+        # 4. Create Audit Trail (Stock Log)
+        StockLog.objects.create(
+            product=product,
+            change_amount=-instance.quantity, # Negative because it's a sale
+            current_stock=product.stock_quantity,
+            type='SALE',
+            notes=f"Sold via Transaction: {instance.sale.transaction_id}"
+        )
