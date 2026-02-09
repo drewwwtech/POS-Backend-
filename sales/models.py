@@ -1,4 +1,3 @@
-from itertools import product
 from django.db import models, transaction  # Added transaction
 from inventory.models import Product, StockLog
 from django.db.models.signals import post_save, pre_save
@@ -49,7 +48,9 @@ def process_sale_item(sender, instance, created, **kwargs):
             product.stock_quantity -= instance.quantity
             
             # This triggers the track_stock_changes signal in inventory/models.py
-            product.save() 
+            product._skip_stock_log = True
+            product.save()
+            product._skip_stock_log = False 
 
             # 2. Update the Parent Sale Total
             sale = instance.sale

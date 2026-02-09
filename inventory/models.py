@@ -51,7 +51,7 @@ class StockLog(models.Model):
 
 @receiver(pre_save, sender=Product)
 def track_stock_changes(sender, instance, **kwargs):
-    if instance.pk:
+    if instance.pk and not getattr(instance, '_skip_stock_log', False):
         try:
             old_product = Product.objects.get(pk=instance.pk)
             
