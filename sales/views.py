@@ -1,17 +1,21 @@
 from django.db.models import Sum
 from django.utils import timezone
 from django.http import HttpResponse
-from rest_framework import generics, filters
+from django.core.exceptions import ValidationError
+from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+
+# PDF Generation
 from reportlab.pdfgen import canvas
 
+# Models and Serializers
 from .models import Sale, SaleItem
-from inventory.models import Product # Import added
-from .serializers import SaleSerializer
+from inventory.models import Product
+from .serializers import SaleSerializer, SaleReceiptSerializer
 
-# 1. Main Transaction API
+# 1. Main Transaction API (For History and Searching)
 class SaleListAPI(generics.ListCreateAPIView): 
     queryset = Sale.objects.all().order_by('-timestamp')
     serializer_class = SaleSerializer
@@ -19,7 +23,7 @@ class SaleListAPI(generics.ListCreateAPIView):
     filterset_fields = ['timestamp'] 
     search_fields = ['transaction_id']
 
-# 2. Modern Dashboard API
+# 2. Modern Dashboard API (For General Stats)
 class DashboardSummaryAPI(APIView):
     def get(self, request):
         total_revenue = Sale.objects.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
@@ -29,9 +33,10 @@ class DashboardSummaryAPI(APIView):
             total_qty=Sum('quantity')
         ).order_by('-total_qty').first()
 
-        # STRICT FIX: Check real Inventory levels, not just Sales history
+        # Check real Inventory levels for items under the threshold (10)
         low_stock_items = Product.objects.filter(
-            stock_quantity__lt=10
+            stock_quantity__lt=10,
+            is_active=True  # Only alert for products we are still actively selling
         ).values('name', 'stock_quantity')
 
         return Response({
@@ -49,9 +54,10 @@ class DashboardSummaryAPI(APIView):
             }
         })
 
-# 3. Daily Closing Report API
+# 3. Daily Closing Report API (Synced to Asia/Manila)
 class DailyClosingReportAPI(APIView):
     def get(self, request):
+        # Uses your fixed TIME_ZONE setting automatically
         today = timezone.now().date()
         sales_today = Sale.objects.filter(timestamp__date=today)
         
@@ -68,8 +74,20 @@ class DailyClosingReportAPI(APIView):
             "status": "Closed" if transaction_count > 0 else "No Sales Today"
         })
 
-# 4. Receipt Generator
+# 4. Receipt Logic (JSON and PDF)
+
+class ReceiptDetailView(APIView):
+    """Returns JSON data for frontend receipt display"""
+    def get(self, request, transaction_id):
+        try:
+            sale = Sale.objects.get(transaction_id=transaction_id)
+            serializer = SaleReceiptSerializer(sale)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Sale.DoesNotExist:
+            return Response({"error": "Receipt not found"}, status=status.HTTP_404_NOT_FOUND)
+
 def generate_receipt(request, transaction_id):
+    """Generates a downloadable PDF Receipt"""
     try:
         sale = Sale.objects.get(transaction_id=transaction_id)
     except Sale.DoesNotExist:
@@ -84,6 +102,7 @@ def generate_receipt(request, transaction_id):
     
     p.setFont("Helvetica", 12)
     p.drawString(100, 780, f"Transaction: {sale.transaction_id}")
+    # Localized timestamp formatting
     p.drawString(100, 760, f"Date: {sale.timestamp.strftime('%Y-%m-%d %H:%M')}")
     p.line(100, 750, 500, 750)
     
@@ -98,4 +117,4 @@ def generate_receipt(request, transaction_id):
     
     p.showPage()
     p.save()
-    return response
+    return response # FIXED: Now returns the PDF file

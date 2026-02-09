@@ -36,3 +36,13 @@ class SaleSerializer(serializers.ModelSerializer):
         sale.save()
         
         return sale
+
+# --- NEW ADDITION BELOW TO FIX THE CRASH ---
+
+class SaleReceiptSerializer(SaleSerializer):
+    """
+    Inherits from SaleSerializer since the fields are identical.
+    This provides the name your views.py is looking for.
+    """
+    class Meta(SaleSerializer.Meta):
+        fields = ['transaction_id', 'timestamp', 'total_amount', 'items']
