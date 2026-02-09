@@ -1,6 +1,8 @@
+import uuid
 from rest_framework import serializers
 from .models import Sale, SaleItem
 from decimal import Decimal
+
 
 class SaleItemSerializer(serializers.ModelSerializer):
     product_name = serializers.ReadOnlyField(source='product.name')
@@ -17,6 +19,10 @@ class SaleSerializer(serializers.ModelSerializer):
         fields = ['id', 'transaction_id', 'timestamp', 'total_amount', 'items']
 
     def create(self, validated_data):
+
+        if not validated_data.get('transaction_id'):
+            validated_data['transaction_id'] = f"SALE-{uuid.uuid4().hex[:8].upper()}"
+
         items_data = validated_data.pop('items')
         sale = Sale.objects.create(**validated_data)
         
