@@ -8,12 +8,12 @@ from .serializers import (
     DeliveryCalendarSerializer,
     SimpleDeliverySerializer,
     DeliveryUpdateSerializer,
-    DeliveryItemSerializer
+    DeliveryItemSerializer,
+    DeliveryPreviewSerializer
 )
-from inventory.models import Product
 
 
-# 1. List all deliveries (with filtering)
+# 1. List all deliveries
 class DeliveryListAPI(generics.ListCreateAPIView):
     queryset = Delivery.objects.all().order_by('-delivery_date')
     serializer_class = DeliverySerializer
@@ -31,18 +31,16 @@ class DeliveryListAPI(generics.ListCreateAPIView):
         # Handle items if provided
         items_data = request.data.get('items', [])
         for item_data in items_data:
-            product_id = item_data.get('product_id') or item_data.get('product')
-            expected_qty = item_data.get('expected_quantity')
-            if product_id and expected_qty:
-                try:
-                    product = Product.objects.get(pk=product_id)
-                    DeliveryItem.objects.create(
-                        delivery=delivery,
-                        product=product,
-                        expected_quantity=expected_qty
-                    )
-                except Product.DoesNotExist:
-                    pass
+            product_name = item_data.get('product_name')
+            quantity = item_data.get('quantity')
+            unit = item_data.get('unit', 'PCS')
+            if product_name and quantity:
+                DeliveryItem.objects.create(
+                    delivery=delivery,
+                    product_name=product_name,
+                    quantity=quantity,
+                    unit=unit
+                )
         
         return Response(
             DeliverySerializer(delivery).data,
@@ -61,15 +59,28 @@ class DeliveryDetailAPI(generics.RetrieveUpdateDestroyAPIView):
         return DeliverySerializer
 
 
-# 3. Calendar events API (FullCalendar format)
+# 3. Preview delivery (clean format for screenshot)
+class DeliveryPreviewAPI(APIView):
+    """
+    GET /api/deliveries/<id>/preview/
+    Returns clean preview format for screenshot/sharing
+    """
+
+    def get(self, request, pk):
+        try:
+            delivery = Delivery.objects.get(pk=pk)
+        except Delivery.DoesNotExist:
+            return Response({"error": "Delivery not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = DeliveryPreviewSerializer(delivery)
+        return Response(serializer.data)
+
+
+# 4. Calendar events API (FullCalendar format)
 class DeliveryCalendarAPI(APIView):
     """
     Returns deliveries formatted for FullCalendar
     GET /api/deliveries/calendar/
-    
-    Query params:
-    - month: Filter by month (YYYY-MM)
-    - status: Filter by status (PENDING, COMPLETED, etc.)
     """
 
     def get(self, request):
@@ -88,34 +99,29 @@ class DeliveryCalendarAPI(APIView):
         # Auto-update overdue status
         today = timezone.now().date()
         for delivery in queryset:
-            if delivery.status == 'PENDING' and delivery.delivery_date < today:
-                delivery.status = 'OVERDUE'
+            if delivery.status in ['PENDING', 'SENT'] and delivery.delivery_date < today:
+                delivery.status = 'PROBLEM'
                 delivery.save()
 
         serializer = DeliveryCalendarSerializer(queryset, many=True)
         return Response(serializer.data)
 
 
-# 4. Pending deliveries only
+# 5. Pending deliveries only
 class PendingDeliveriesAPI(generics.ListAPIView):
     queryset = Delivery.objects.filter(status='PENDING').order_by('delivery_date')
     serializer_class = DeliverySerializer
 
 
-# 5. Overdue deliveries
-class OverdueDeliveriesAPI(generics.ListAPIView):
-    queryset = Delivery.objects.filter(status='OVERDUE').order_by('delivery_date')
-    serializer_class = DeliverySerializer
-
-
-# 6. Update delivery items (receive products)
-class ReceiveDeliveryItemsAPI(APIView):
+# 6. Update received items
+class ReceiveDeliveryAPI(APIView):
     """
     POST /api/deliveries/<id>/receive/
     {
+        "remarks": "Hansel short by 2 boxes",
         "items": [
-            {"product": 1, "received_quantity": 50},
-            {"product": 2, "received_quantity": 30}
+            {"id": 1, "received_quantity": 5},
+            {"id": 2, "received_quantity": 8}
         ]
     }
     """
@@ -126,40 +132,40 @@ class ReceiveDeliveryItemsAPI(APIView):
         except Delivery.DoesNotExist:
             return Response({"error": "Delivery not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if delivery.status == 'COMPLETED':
-            return Response({"error": "Delivery already completed"}, status=status.HTTP_400_BAD_REQUEST)
+        if delivery.status == 'RECEIVED':
+            return Response({"error": "Delivery already received"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Update remarks
+        delivery.remarks = request.data.get('remarks', '')
+
+        # Update items
         items_data = request.data.get('items', [])
         updated_items = []
 
         for item_data in items_data:
-            product_id = item_data.get('product')
+            item_id = item_data.get('id')
             received_qty = item_data.get('received_quantity', 0)
 
             try:
-                item = DeliveryItem.objects.get(delivery=delivery, product_id=product_id)
+                item = DeliveryItem.objects.get(pk=item_id, delivery=delivery)
                 item.received_quantity = received_qty
                 item.save()
                 updated_items.append(DeliveryItemSerializer(item).data)
             except DeliveryItem.DoesNotExist:
                 return Response(
-                    {"error": f"Product {product_id} not found in delivery"},
+                    {"error": f"Item {item_id} not found in delivery"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # Check if all items received
-        all_received = all(
-            item.received_quantity >= item.expected_quantity
-            for item in delivery.items.all()
-        )
-
-        if all_received:
-            delivery.status = 'COMPLETED'
-            delivery.save()
+        # Determine status
+        has_problem = bool(delivery.remarks.strip())
+        delivery.status = 'RECEIVED' if not has_problem else 'PROBLEM'
+        delivery.save()
 
         return Response({
-            "message": "Items updated",
-            "delivery_status": delivery.status,
+            "message": "Delivery updated",
+            "status": delivery.status,
+            "remarks": delivery.remarks,
             "items": updated_items
         })
 
@@ -173,19 +179,18 @@ class DeliveryDashboardAPI(APIView):
         week_later = today + timezone.timedelta(days=7)
 
         pending = Delivery.objects.filter(status='PENDING').count()
-        overdue = Delivery.objects.filter(status='OVERDUE').count()
-        completed_today = Delivery.objects.filter(
-            status='COMPLETED',
-            delivery_date=today
-        ).count()
+        sent = Delivery.objects.filter(status='SENT').count()
+        received = Delivery.objects.filter(status='RECEIVED').count()
+        problem = Delivery.objects.filter(status='PROBLEM').count()
         upcoming = Delivery.objects.filter(
-            status='PENDING',
+            status__in=['PENDING', 'SENT'],
             delivery_date__range=[today, week_later]
         ).count()
 
         return Response({
             "pending": pending,
-            "overdue": overdue,
-            "completed_today": completed_today,
+            "sent": sent,
+            "received": received,
+            "problem": problem,
             "upcoming_this_week": upcoming
         })

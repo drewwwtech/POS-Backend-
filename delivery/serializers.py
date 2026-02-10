@@ -1,27 +1,23 @@
 from rest_framework import serializers
 from .models import Delivery, DeliveryItem
-from inventory.models import Product
 
 
 class DeliveryItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.ReadOnlyField(source='product.name')
-    product_sku = serializers.ReadOnlyField(source='product.sku')
 
     class Meta:
         model = DeliveryItem
-        fields = ['id', 'product', 'product_name', 'product_sku', 'expected_quantity', 'received_quantity']
+        fields = ['id', 'product_name', 'quantity', 'unit', 'received_quantity']
 
 
 class DeliverySerializer(serializers.ModelSerializer):
     items = DeliveryItemSerializer(many=True, read_only=True)
     color = serializers.ReadOnlyField()
-    is_overdue = serializers.ReadOnlyField()
 
     class Meta:
         model = Delivery
         fields = [
-            'id', 'delivery_date', 'expected_time', 'supplier_name',
-            'description', 'status', 'notes', 'items', 'color', 'is_overdue',
+            'id', 'delivery_date', 'supplier_name',
+            'status', 'notes', 'remarks', 'items', 'color',
             'created_at', 'updated_at'
         ]
 
@@ -47,14 +43,23 @@ class DeliveryCalendarSerializer(serializers.ModelSerializer):
 
 
 class SimpleDeliverySerializer(serializers.ModelSerializer):
-    """Simple serializer for creating deliveries without items"""
+    """Simple serializer for creating deliveries"""
 
     class Meta:
         model = Delivery
-        fields = ['delivery_date', 'expected_time', 'supplier_name', 'description', 'status', 'notes']
+        fields = ['delivery_date', 'supplier_name', 'status', 'notes']
 
 
 class DeliveryUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Delivery
-        fields = ['delivery_date', 'expected_time', 'supplier_name', 'description', 'status', 'notes']
+        fields = ['delivery_date', 'supplier_name', 'status', 'notes', 'remarks']
+
+
+class DeliveryPreviewSerializer(serializers.ModelSerializer):
+    """Serializer for preview format"""
+    items = DeliveryItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Delivery
+        fields = ['id', 'delivery_date', 'supplier_name', 'notes', 'items']
