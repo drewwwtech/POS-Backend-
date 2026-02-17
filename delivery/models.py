@@ -4,15 +4,15 @@ from django.utils import timezone
 
 class Delivery(models.Model):
     STATUS_CHOICES = [
-        ('PENDING', 'Pending / Not Sent'),
-        ('SENT', 'Sent to Supplier'),
-        ('RECEIVED', 'Received'),
-        ('PROBLEM', 'Problem / Issue'),
+        ('PENDING', 'Pending'),
+        ('SENT', 'Sent (Indicator)'),
+        ('RECEIVED', 'Completed'),
+        ('PROBLEM', 'Problem'),
     ]
 
     COLOR_MAP = {
         'PENDING': '#F59E0B',    # Yellow/Orange
-        'SENT': '#3B82F6',       # Blue
+        'SENT': '#8B5CF6',      # Purple - indicator only
         'RECEIVED': '#10B981',   # Green
         'PROBLEM': '#EF4444',    # Red
     }

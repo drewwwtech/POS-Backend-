@@ -2,15 +2,29 @@ from django.shortcuts import render
 from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import Product, StockLog
-from .serializers import ProductSerializer, RestockSerializer, StockLogSerializer
+from .models import Product, StockLog, Category
+from .serializers import ProductSerializer, RestockSerializer, StockLogSerializer, CategorySerializer
 
 # 1. Your existing Scanner-Ready List API
-class ProductListAPI(generics.ListAPIView):
+class ProductListAPI(generics.ListCreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     filter_backends = [filters.SearchFilter]
-    search_fields = ['name', 'sku'] # Scanner will type into this field
+    search_fields = ['name', 'sku']
+
+# 1b. Product Detail API (Get, Update, Delete)
+class ProductDetailAPI(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer # Scanner will type into this field
+
+# Category APIs
+class CategoryListAPI(generics.ListCreateAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+class CategoryDetailAPI(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
 
 # 2. NEW: The "Stock In" API
 # inventory/views.py
