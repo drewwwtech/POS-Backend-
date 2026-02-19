@@ -69,6 +69,12 @@ class DeliveryItem(models.Model):
     quantity = models.PositiveIntegerField(default=0)  # Ordered quantity
     unit = models.CharField(max_length=20, choices=UNIT_CHOICES, default='PCS')
     received_quantity = models.PositiveIntegerField(default=0)  # Received quantity
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Cost per unit")
 
     def __str__(self):
         return f"{self.product_name}: {self.quantity} {self.unit}"
+
+    @property
+    def total_cost(self):
+        """Calculate total cost for this item"""
+        return self.quantity * (self.unit_cost or 0)

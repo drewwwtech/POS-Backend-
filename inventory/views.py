@@ -50,3 +50,28 @@ class StockHistoryListAPI(generics.ListAPIView):
     """
     queryset = StockLog.objects.all().order_by('-timestamp')
     serializer_class = StockLogSerializer
+
+
+# 4. NEW: SKU Lookup API (for barcode scanner)
+class ProductLookupAPI(APIView):
+    """
+    Exact SKU lookup for the barcode scanner.
+    GET /api/inventory/products/lookup/?sku=ABC123
+    Returns full product details if found, 404 if not.
+    """
+    def get(self, request):
+        sku = request.query_params.get('sku', '').strip()
+        if not sku:
+            return Response(
+                {"error": "SKU parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            product = Product.objects.get(sku=sku)
+            serializer = ProductSerializer(product)
+            return Response({"found": True, "product": serializer.data})
+        except Product.DoesNotExist:
+            return Response(
+                {"found": False, "sku": sku},
+                status=status.HTTP_404_NOT_FOUND
+            )

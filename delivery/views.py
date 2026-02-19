@@ -81,6 +81,9 @@ class DeliveryCalendarAPI(APIView):
     """
     Returns deliveries formatted for FullCalendar
     GET /api/deliveries/calendar/
+    
+    Note: This endpoint is read-only. Use /api/deliveries/update-overdue/ 
+    to update overdue statuses.
     """
 
     def get(self, request):
@@ -96,15 +99,42 @@ class DeliveryCalendarAPI(APIView):
         if status_param:
             queryset = queryset.filter(status=status_param)
 
-        # Auto-update overdue status
-        today = timezone.now().date()
-        for delivery in queryset:
-            if delivery.status in ['PENDING', 'SENT'] and delivery.delivery_date < today:
-                delivery.status = 'PROBLEM'
-                delivery.save()
+        # Note: No longer auto-updating status on GET - keeping it read-only
+        # Use the /update-overdue/ endpoint to update overdue deliveries
 
         serializer = DeliveryCalendarSerializer(queryset, many=True)
         return Response(serializer.data)
+
+
+# 4b. Update overdue deliveries (separate endpoint)
+class UpdateOverdueDeliveriesAPI(APIView):
+    """
+    Update overdue deliveries to PROBLEM status
+    POST /api/deliveries/update-overdue/
+    
+    This should be called periodically (e.g., via cron, Celery beat, or manually)
+    instead of modifying data on GET requests.
+    """
+
+    def post(self, request):
+        today = timezone.now().date()
+        
+        # Get overdue deliveries
+        overdue = Delivery.objects.filter(
+            status__in=['PENDING', 'SENT'],
+            delivery_date__lt=today
+        )
+        
+        updated_count = 0
+        for delivery in overdue:
+            delivery.status = 'PROBLEM'
+            delivery.save()
+            updated_count += 1
+
+        return Response({
+            "message": f"Updated {updated_count} overdue deliveries",
+            "updated_count": updated_count
+        })
 
 
 # 5. Pending deliveries only

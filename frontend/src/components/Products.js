@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { productsAPI, categoriesAPI } from '../services/api';
 
 function Products() {
@@ -12,6 +12,7 @@ function Products() {
     name: '',
     sku: '',
     price: '',
+    base_price: '',
     stock_quantity: '',
     category: '',
     description: '',
@@ -20,8 +21,24 @@ function Products() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
 
+  // Scanner state
+  const [scannerSku, setScannerSku] = useState('');
+  const [scannerLoading, setScannerLoading] = useState(false);
+  const [foundProduct, setFoundProduct] = useState(null);
+  const [restockQty, setRestockQty] = useState('');
+  const [restockNotes, setRestockNotes] = useState('');
+  const [toast, setToast] = useState(null);
+  const scannerRef = useRef(null);
+
   useEffect(() => {
     fetchData();
+  }, []);
+
+  // Auto-focus scanner on load
+  useEffect(() => {
+    if (scannerRef.current) {
+      scannerRef.current.focus();
+    }
   }, []);
 
   const fetchData = async () => {
@@ -42,14 +59,89 @@ function Products() {
     }
   };
 
-  const openModal = (product = null) => {
+  // Show toast notification
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Scanner: lookup SKU on Enter
+  const handleScannerSubmit = async (e) => {
+    e.preventDefault();
+    const sku = scannerSku.trim();
+    if (!sku) return;
+
+    setScannerLoading(true);
+    setFoundProduct(null);
+    setError(null);
+
+    try {
+      const res = await productsAPI.lookup(sku);
+      if (res.data.found) {
+        setFoundProduct(res.data.product);
+        setRestockQty('');
+        setRestockNotes('');
+      }
+    } catch (err) {
+      if (err.response && err.response.status === 404) {
+        // Product not found — open Add Product modal with SKU pre-filled
+        openModal(null, sku);
+        setScannerSku('');
+      } else {
+        setError('Scanner error: ' + (err.response?.data?.error || err.message));
+      }
+    } finally {
+      setScannerLoading(false);
+    }
+  };
+
+  // Restock submit
+  const handleRestock = async () => {
+    const qty = parseInt(restockQty);
+    if (!qty || qty <= 0) {
+      setError('Please enter a valid quantity (must be at least 1)');
+      return;
+    }
+
+    try {
+      const res = await productsAPI.restock({
+        sku: foundProduct.sku,
+        quantity_added: qty,
+        notes: restockNotes || '',
+      });
+      showToast(`✅ Restocked ${foundProduct.name}! New stock: ${res.data.new_total_stock}`);
+      // Clear scanner
+      setFoundProduct(null);
+      setScannerSku('');
+      setRestockQty('');
+      setRestockNotes('');
+      setError(null);
+      fetchData();
+      // Re-focus scanner for next scan
+      if (scannerRef.current) scannerRef.current.focus();
+    } catch (err) {
+      setError('Restock failed: ' + (err.response?.data?.sku || err.response?.data?.detail || JSON.stringify(err.response?.data) || err.message));
+    }
+  };
+
+  // Cancel scanner panel
+  const cancelScanner = () => {
+    setFoundProduct(null);
+    setScannerSku('');
+    setRestockQty('');
+    setRestockNotes('');
+    setError(null);
+    if (scannerRef.current) scannerRef.current.focus();
+  };
+
+  const openModal = (product = null, prefilledSku = '') => {
     if (product) {
       setEditingProduct(product);
       setFormData({
         name: product.name || '',
         sku: product.sku || '',
+        price: product.price || '',
         base_price: product.base_price || '',
-        price_to_sell: product.price_to_sell || '',
         stock_quantity: product.stock_quantity || '',
         category: product.category || '',
         description: product.description || '',
@@ -59,9 +151,9 @@ function Products() {
       setEditingProduct(null);
       setFormData({
         name: '',
-        sku: '',
+        sku: prefilledSku || '',
+        price: '',
         base_price: '',
-        price_to_sell: '',
         stock_quantity: '',
         category: '',
         description: '',
@@ -79,21 +171,39 @@ function Products() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate prices are positive
+    const price = parseFloat(formData.price);
+    const basePrice = parseFloat(formData.base_price);
+    
+    if (isNaN(price) || price < 0) {
+      setError('Selling price must be a positive number');
+      return;
+    }
+    
+    if (isNaN(basePrice) || basePrice < 0) {
+      setError('Base price (cost) must be a positive number');
+      return;
+    }
+    
     try {
       const data = {
-        ...formData,
+        name: formData.name,
         sku: formData.sku || undefined,
-        price: parseFloat(formData.price_to_sell) || 0,
-        base_price: parseFloat(formData.base_price) || 0,
-        price_to_sell: formData.price_to_sell ? parseFloat(formData.price_to_sell) : null,
+        price: price,
+        base_price: basePrice,
         stock_quantity: parseInt(formData.stock_quantity) || 0,
         category: formData.category ? parseInt(formData.category) : null,
+        description: formData.description,
+        is_active: formData.is_active,
       };
 
       if (editingProduct) {
         await productsAPI.update(editingProduct.id, data);
+        showToast(`✅ Updated ${data.name}`);
       } else {
         await productsAPI.create(data);
+        showToast(`✅ Created ${data.name}`);
       }
 
       closeModal();
@@ -146,6 +256,127 @@ function Products() {
         <p>Manage your product inventory</p>
       </header>
 
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.message}
+        </div>
+      )}
+
+      {/* SKU Scanner Section */}
+      <div className="scanner-section">
+        <div className="scanner-header">
+          <i className="fas fa-barcode"></i>
+          <h3>SKU Scanner / Stock In</h3>
+        </div>
+        <form onSubmit={handleScannerSubmit} className="scanner-form">
+          <div className="scanner-input-wrapper">
+            <i className="fas fa-search"></i>
+            <input
+              ref={scannerRef}
+              type="text"
+              className="scanner-input"
+              placeholder="Scan barcode or type SKU and press Enter..."
+              value={scannerSku}
+              onChange={(e) => setScannerSku(e.target.value)}
+              disabled={scannerLoading}
+            />
+            {scannerLoading && <div className="scanner-spinner"></div>}
+          </div>
+          <button type="submit" className="btn btn-primary" disabled={scannerLoading || !scannerSku.trim()}>
+            <i className="fas fa-search"></i> Lookup
+          </button>
+        </form>
+
+        {/* Stock In Panel — shown when product is found */}
+        {foundProduct && (
+          <div className="stock-in-panel">
+            <div className="stock-in-header">
+              <h4><i className="fas fa-box-open"></i> Stock In: {foundProduct.name}</h4>
+              <span className={`status ${foundProduct.is_active ? 'active' : 'inactive'}`}>
+                {foundProduct.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+            <div className="stock-in-details">
+              <div className="detail-item">
+                <label>SKU</label>
+                <span>{foundProduct.sku}</span>
+              </div>
+              <div className="detail-item">
+                <label>Category</label>
+                <span>{getCategoryName(foundProduct.category)}</span>
+              </div>
+              <div className="detail-item">
+                <label>Base Price</label>
+                <span>{formatCurrency(foundProduct.base_price)}</span>
+              </div>
+              <div className="detail-item">
+                <label>Selling Price</label>
+                <span style={{ fontWeight: 'bold', color: '#4a90e2' }}>
+                  {formatCurrency(foundProduct.price)}
+                </span>
+              </div>
+              <div className="detail-item">
+                <label>Current Stock</label>
+                <span style={{
+                  fontWeight: 'bold',
+                  fontSize: '1.2rem',
+                  color: foundProduct.stock_quantity <= 0 ? '#fc8181' :
+                    foundProduct.stock_quantity <= 10 ? '#f39c12' : '#48bb78'
+                }}>
+                  {foundProduct.stock_quantity}
+                </span>
+              </div>
+              <div className="detail-item">
+                <label>Profit Margin</label>
+                <span style={{ color: '#48bb78', fontWeight: 'bold' }}>
+                  {foundProduct.profit_margin ? foundProduct.profit_margin.toFixed(1) : 0}%
+                </span>
+              </div>
+            </div>
+
+            <div className="stock-in-form">
+              <div className="stock-in-qty-row">
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Quantity to Add *</label>
+                  <input
+                    type="number"
+                    className="form-control stock-in-qty-input"
+                    placeholder="Enter quantity..."
+                    value={restockQty}
+                    onChange={(e) => setRestockQty(e.target.value)}
+                    min="1"
+                    autoFocus
+                  />
+                </div>
+                <div className="form-group" style={{ flex: 2 }}>
+                  <label>Notes (optional)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Delivery from supplier X"
+                    value={restockNotes}
+                    onChange={(e) => setRestockNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="stock-in-actions">
+                <button className="btn btn-secondary" onClick={cancelScanner}>
+                  <i className="fas fa-times"></i> Cancel
+                </button>
+                <button
+                  className="btn btn-success"
+                  onClick={handleRestock}
+                  disabled={!restockQty || parseInt(restockQty) <= 0}
+                >
+                  <i className="fas fa-plus-circle"></i> Stock In
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '10px', flex: 1 }}>
           <div className="search-bar" style={{ flex: 1, maxWidth: '300px' }}>
@@ -190,7 +421,7 @@ function Products() {
                 <th>SKU</th>
                 <th>Category</th>
                 <th>Base Price</th>
-                <th>Price to Sell</th>
+                <th>Selling Price</th>
                 <th>Stock</th>
                 <th>Profit Margin</th>
                 <th>Status</th>
@@ -213,16 +444,16 @@ function Products() {
                   <td>{product.sku}</td>
                   <td>{getCategoryName(product.category)}</td>
                   <td>{formatCurrency(product.base_price || 0)}</td>
-                  <td style={{ fontWeight: 'bold' }}>{formatCurrency(product.price_to_sell || product.price || 0)}</td>
-                  <td style={{ 
+                  <td style={{ fontWeight: 'bold' }}>{formatCurrency(product.price || 0)}</td>
+                  <td style={{
                     fontWeight: 'bold',
-                    color: product.stock_quantity <= 0 ? '#fc8181' : 
-                           product.stock_quantity <= 10 ? '#f39c12' : '#48bb78'
+                    color: product.stock_quantity <= 0 ? '#fc8181' :
+                      product.stock_quantity <= 10 ? '#f39c12' : '#48bb78'
                   }}>{product.stock_quantity}</td>
-                  <td style={{ 
+                  <td style={{
                     fontWeight: 'bold',
-                    color: (product.profit_margin || 0) > 0 ? '#48bb78' : 
-                           (product.profit_margin || 0) < 0 ? '#fc8181' : '#f39c12'
+                    color: (product.profit_margin || 0) > 0 ? '#48bb78' :
+                      (product.profit_margin || 0) < 0 ? '#fc8181' : '#f39c12'
                   }}>{product.profit_margin ? product.profit_margin.toFixed(1) : 0}%</td>
                   <td>
                     <span className={`status ${product.is_active ? 'active' : 'inactive'}`}>
@@ -273,6 +504,11 @@ function Products() {
                   placeholder="Unique SKU code"
                   required
                 />
+                {formData.sku && !editingProduct && (
+                  <small style={{ color: '#4a90e2', marginTop: '4px', display: 'block' }}>
+                    <i className="fas fa-barcode"></i> SKU pre-filled from scanner
+                  </small>
+                )}
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -280,6 +516,7 @@ function Products() {
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     className="form-control"
                     value={formData.base_price}
                     onChange={(e) => setFormData({ ...formData, base_price: e.target.value })}
@@ -288,13 +525,14 @@ function Products() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Price to Sell *</label>
+                  <label>Selling Price *</label>
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     className="form-control"
-                    value={formData.price_to_sell}
-                    onChange={(e) => setFormData({ ...formData, price_to_sell: e.target.value })}
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                     placeholder="Selling price"
                     required
                   />
@@ -305,6 +543,7 @@ function Products() {
                   <label>Stock Quantity *</label>
                   <input
                     type="number"
+                    min="0"
                     className="form-control"
                     value={formData.stock_quantity}
                     onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}

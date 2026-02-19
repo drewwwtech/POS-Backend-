@@ -16,21 +16,37 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'sku', 'price', 'base_price', 'price_to_sell', 'stock_quantity', 'description', 'category', 'category_name', 'is_active', 'profit_margin', 'profit_amount']
+        fields = ['id', 'name', 'sku', 'price', 'base_price', 'stock_quantity', 'description', 'category', 'category_name', 'is_active', 'profit_margin', 'profit_amount']
+
+    def validate_price(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Price must be a positive number.")
+        return value
+
+    def validate_base_price(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Base price must be a positive number.")
+        return value
+
+    def validate(self, attrs):
+        price = attrs.get('price')
+        base_price = attrs.get('base_price')
+        
+        if price is not None and price < 0:
+            raise serializers.ValidationError({'price': 'Price must be a positive number.'})
+        
+        if base_price is not None and base_price < 0:
+            raise serializers.ValidationError({'base_price': 'Base price must be a positive number.'})
+        
+        return attrs
 
     def get_profit_margin(self, obj):
-        """Calculate profit margin percentage"""
-        cost = float(obj.base_price) if obj.base_price else 0
-        selling = float(obj.price_to_sell) if obj.price_to_sell else float(obj.price) if obj.price else 0
-        if selling > 0 and cost > 0:
-            return ((selling - cost) / selling) * 100
-        return 0
+        """Call model method to calculate profit margin percentage"""
+        return obj.get_profit_margin()
     
     def get_profit_amount(self, obj):
-        """Calculate profit amount per unit"""
-        cost = float(obj.base_price) if obj.base_price else 0
-        selling = float(obj.price_to_sell) if obj.price_to_sell else float(obj.price) if obj.price else 0
-        return selling - cost
+        """Call model method to calculate profit amount per unit"""
+        return float(obj.get_profit_amount())
 
 
 class StockLogSerializer(serializers.ModelSerializer):

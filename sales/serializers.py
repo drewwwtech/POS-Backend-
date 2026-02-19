@@ -11,6 +11,16 @@ class SaleItemSerializer(serializers.ModelSerializer):
         model = SaleItem
         fields = ['id', 'product', 'product_name', 'quantity', 'unit_price']
 
+    def validate_unit_price(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Unit price must be a positive number.")
+        return value
+
+    def validate_quantity(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError("Quantity must be at least 1.")
+        return value
+
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True)
     transaction_id = serializers.CharField(required=False)
@@ -19,28 +29,48 @@ class SaleSerializer(serializers.ModelSerializer):
         model = Sale
         fields = ['id', 'transaction_id', 'timestamp', 'total_amount', 'items']
 
-    def create(self, validated_data):
+    def validate_items(self, items):
+        """Validate all items in the sale"""
+        if not items:
+            raise serializers.ValidationError("At least one item is required.")
+        return items
 
+    def create(self, validated_data):
+        from inventory.models import Product
+        
         if not validated_data.get('transaction_id'):
             validated_data['transaction_id'] = f"SALE-{uuid.uuid4().hex[:8].upper()}"
 
         items_data = validated_data.pop('items')
+        
+        # Pre-validate stock availability
+        for item_data in items_data:
+            product = item_data.get('product')
+            quantity = item_data.get('quantity', 0)
+            
+            if not product:
+                raise serializers.ValidationError("Product is required for each item.")
+            
+            if quantity <= 0:
+                raise serializers.ValidationError(f"Quantity must be at least 1 for all items.")
+            
+            # Check stock
+            if hasattr(product, 'stock_quantity'):
+                if product.stock_quantity < quantity:
+                    raise serializers.ValidationError(
+                        f"Insufficient stock for {product.name}. Available: {product.stock_quantity}, Requested: {quantity}"
+                    )
+        
+        # All validations passed, create the sale
+        # The total_amount will be calculated by the post_save signal in models.py
         sale = Sale.objects.create(**validated_data)
         
-        running_total = Decimal('0.00')
-        
+        # Create items - the signal will handle stock deduction and total calculation
         for item_data in items_data:
-            # Create the item
-            item = SaleItem.objects.create(sale=sale, **item_data)
-            
-            # Calculate the total here instead of waiting for the signal
-            price = Decimal(str(item.unit_price))
-            qty = Decimal(str(item.quantity))
-            running_total += (price * qty)
+            SaleItem.objects.create(sale=sale, **item_data)
         
-        # Update the sale object directly before returning it
-        sale.total_amount = running_total
-        sale.save()
+        # Refresh to get the calculated total from the signal
+        sale.refresh_from_db()
         
         return sale
 

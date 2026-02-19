@@ -4,6 +4,7 @@ from .views import (
     DeliveryDetailAPI,
     DeliveryPreviewAPI,
     DeliveryCalendarAPI,
+    UpdateOverdueDeliveriesAPI,
     PendingDeliveriesAPI,
     ReceiveDeliveryAPI,
     DeliveryDashboardAPI
@@ -19,6 +20,9 @@ urlpatterns = [
 
     # Calendar endpoint (FullCalendar format)
     path('calendar/', DeliveryCalendarAPI.as_view(), name='delivery-calendar'),
+
+    # Update overdue deliveries (call periodically via cron/scheduler)
+    path('update-overdue/', UpdateOverdueDeliveriesAPI.as_view(), name='delivery-update-overdue'),
 
     # Filters
     path('pending/', PendingDeliveriesAPI.as_view(), name='delivery-pending'),

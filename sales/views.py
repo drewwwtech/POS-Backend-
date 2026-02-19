@@ -1,4 +1,5 @@
-from django.db.models import Sum
+from django.db.models import Sum, Count
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from django.http import HttpResponse
 from django.core.exceptions import ValidationError
@@ -9,6 +10,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 # PDF Generation
 from reportlab.pdfgen import canvas
+
+# Standard Library
+from datetime import date, timedelta
+import datetime
 
 # Models and Serializers
 from .models import Sale, SaleItem
@@ -120,12 +125,9 @@ class DailyClosingReportAPI(APIView):
 # 4. Sales Chart API - Returns daily sales for the past 30 days
 class SalesChartAPI(APIView):
     def get(self, request):
-        from django.db.models.functions import TruncDate
-        from django.db.models import Count
-        
         today = timezone.now().date()
         # Get sales for the last 30 days
-        start_date = today - timezone.timedelta(days=29)
+        start_date = today - timedelta(days=29)
         
         # Get daily sales data
         daily_sales = Sale.objects.filter(
@@ -142,7 +144,6 @@ class SalesChartAPI(APIView):
         sales_dict = {str(item['date']): item for item in daily_sales}
         
         # Generate all dates in range
-        import datetime
         dates = []
         revenues = []
         transactions = []
@@ -158,7 +159,7 @@ class SalesChartAPI(APIView):
                 dates.append(date_str)
                 revenues.append(0)
                 transactions.append(0)
-            current += timezone.timedelta(days=1)
+            current += timedelta(days=1)
         
         return Response({
             "labels": dates,
@@ -286,7 +287,7 @@ class DailySalesReportAPI(APIView):
         ).select_related('product')
         
         # Calculate Gross Sales and Net Income
-        gross_sales = total_sales
+        gross_sales = float(total_sales)  # Convert to float for consistent calculation
         total_cost = 0
         
         product_sales = {}
@@ -363,7 +364,6 @@ class MonthlySalesReportAPI(APIView):
             except ValueError:
                 return Response({'error': 'Invalid year or month'}, status=400)
         
-        from datetime import date
         start_date = date(year, month, 1)
         if month == 12:
             end_date = date(year + 1, 1, 1)
@@ -379,7 +379,7 @@ class MonthlySalesReportAPI(APIView):
         transaction_count = sales.count()
         
         # Calculate Gross Sales and Net Income
-        gross_sales = total_sales
+        gross_sales = float(total_sales)  # Convert to float for consistent calculation
         
         items_sold = SaleItem.objects.filter(
             sale__timestamp__date__gte=start_date,
@@ -435,7 +435,6 @@ class YearlySalesReportAPI(APIView):
             except ValueError:
                 return Response({'error': 'Invalid year'}, status=400)
         
-        from datetime import date
         start_date = date(year, 1, 1)
         end_date = date(year + 1, 1, 1)
         
@@ -448,7 +447,7 @@ class YearlySalesReportAPI(APIView):
         transaction_count = sales.count()
         
         # Calculate Gross Sales and Net Income
-        gross_sales = total_sales
+        gross_sales = float(total_sales)  # Convert to float for consistent calculation
         
         items_sold = SaleItem.objects.filter(
             sale__timestamp__date__gte=start_date,
@@ -505,7 +504,6 @@ class SalesRangeReportAPI(APIView):
         except ValueError:
             return Response({'error': 'Invalid date format. Use YYYY-MM-DD'}, status=400)
         
-        from datetime import timedelta
         end_date = end_date + timedelta(days=1)
         
         sales = Sale.objects.filter(
@@ -517,7 +515,7 @@ class SalesRangeReportAPI(APIView):
         transaction_count = sales.count()
         
         # Calculate Gross Sales and Net Income
-        gross_sales = total_sales
+        gross_sales = float(total_sales)  # Convert to float for consistent calculation
         
         items_sold = SaleItem.objects.filter(
             sale__timestamp__date__gte=start_date,

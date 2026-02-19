@@ -3,6 +3,7 @@ from inventory.models import Product, StockLog
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.core.mail import send_mail
+from django.conf import settings
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 
@@ -26,22 +27,36 @@ class SaleItem(models.Model):
 # --- FIX 1: Fetch price BEFORE saving ---
 @receiver(pre_save, sender=SaleItem)
 def fetch_unit_price(sender, instance, **kwargs):
-    if not instance.unit_price:
+    # Only fetch from product if unit_price is None (not explicitly set)
+    # This handles the case where unit_price is passed as 0 or null
+    if instance.unit_price is not None:
+        return  # Price was explicitly set, don't override
+    
+    # Ensure product exists and is saved
+    if not instance.product or not instance.product.pk:
+        return
+    
+    # Try to get price from the loaded product instance first
+    if instance.product.price is not None:
         instance.unit_price = instance.product.price
+    else:
+        # Fallback: fetch fresh from database
+        try:
+            product = Product.objects.get(pk=instance.product.pk)
+            if product.price is not None:
+                instance.unit_price = product.price
+        except Product.DoesNotExist:
+            pass
 
 # --- FIX 2: Process stock and totals AFTER saving ---
 @receiver(post_save, sender=SaleItem)
 def process_sale_item(sender, instance, created, **kwargs):
     if created:
+        # Validation is already done in the serializer's create() method
+        # This signal only handles stock deduction and total calculation
         # Wrap the entire operation in an atomic transaction
         # This ensures that if the stock deduction OR the total update fails,
         # the database rolls back to the state before the sale started.
-        if not instance.product.is_active:
-            raise ValidationError(f"Cannot sell {instance.product.name} because it is inactive.")
-        
-        if instance.product.stock_quantity < instance.quantity:
-            raise ValidationError(f"Insufficient stock for {instance.product.name}")
-
         with transaction.atomic():
             # 1. Automate Stock Deduction
             product = instance.product
@@ -66,8 +81,8 @@ def process_sale_item(sender, instance, created, **kwargs):
             if product.stock_quantity < 10:
                 send_mail(
                     subject=f'⚠️ LOW STOCK ALERT: {product.name}',
-                    message=f'Product {product.name} is low. Current stock: {product.stock_quantity}.',
-                    from_email='alerts@modernpos.com',
-                    recipient_list=['admin@yourshop.com'],
-                    fail_silently=True,
+                    message=f'Product {product.name} is low. Current stock: {product.stock_quantity}. Please restock soon.',
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=['jayceemarco10@gmail.com'],
+                    fail_silently=False,  # Set to False to see errors
                 )

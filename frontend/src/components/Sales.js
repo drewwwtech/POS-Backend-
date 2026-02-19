@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { salesAPI, productsAPI } from '../services/api';
 
 function Sales() {
@@ -6,9 +6,21 @@ function Sales() {
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [recentSales, setRecentSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const barcodeInputRef = useRef(null);
+  const lastBarcodeTime = useRef(Date.now());
+
+  // Auto-dismiss success messages
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   useEffect(() => {
     fetchData();
@@ -33,8 +45,24 @@ function Sales() {
   };
 
   const addToCart = (product) => {
+    // Get current quantity in cart for this product
+    const cartItem = cart.find((item) => item.product === product.id);
+    const currentQtyInCart = cartItem ? cartItem.quantity : 0;
+    const availableStock = product.stock_quantity - currentQtyInCart;
+    
+    // Check if product is in stock
+    if (availableStock <= 0) {
+      setError(`${product.name} is out of stock or already in cart`);
+      return;
+    }
+    
     const existingItem = cart.find((item) => item.product === product.id);
     if (existingItem) {
+      // Check if we can add more
+      if (existingItem.quantity >= product.stock_quantity) {
+        setError(`Cannot add more ${product.name}. Only ${product.stock_quantity} available.`);
+        return;
+      }
       setCart(
         cart.map((item) =>
           item.product === product.id
@@ -43,6 +71,7 @@ function Sales() {
         )
       );
     } else {
+      // Use the product's selling price
       setCart([
         ...cart,
         {
@@ -54,6 +83,7 @@ function Sales() {
         },
       ]);
     }
+    setError(null); // Clear any previous error
   };
 
   const removeFromCart = (productId) => {
@@ -61,19 +91,27 @@ function Sales() {
   };
 
   const updateQuantity = (productId, quantity) => {
-    if (quantity <= 0) {
+    // Validate: quantity must be a positive integer
+    if (quantity === null || quantity === undefined || isNaN(quantity) || quantity < 0) {
+      removeFromCart(productId);
+      return;
+    }
+    
+    const qty = Math.floor(quantity); // Ensure integer
+    if (qty <= 0) {
       removeFromCart(productId);
     } else {
       const item = cart.find(i => i.product === productId);
-      if (item && quantity > item.maxStock) {
-        alert(`Only ${item.maxStock} available in stock!`);
+      if (item && qty > item.maxStock) {
+        setError(`Only ${item.maxStock} available in stock!`);
         return;
       }
       setCart(
         cart.map((item) =>
-          item.product === productId ? { ...item, quantity } : item
+          item.product === productId ? { ...item, quantity: qty } : item
         )
       );
+      setError(null);
     }
   };
 
@@ -92,10 +130,118 @@ function Sales() {
     }).format(amount);
   };
 
+  // Handle barcode scanner input
+  const handleBarcodeScan = (e) => {
+    // Check if Enter key was pressed (most scanners send Enter after barcode)
+    if (e.key === 'Enter' && barcodeInput.trim()) {
+      const scannedSku = barcodeInput.trim();
+      
+      console.log('Scanning SKU:', scannedSku);
+      
+      // Search for product by SKU (case-insensitive)
+      const product = products.find(p => 
+        p.sku === scannedSku || 
+        p.sku?.toLowerCase() === scannedSku.toLowerCase()
+      );
+      
+      if (product) {
+        addToCart(product);
+        setError(null);
+      } else {
+        // Try searching by name as fallback
+        const productByName = products.find(p => 
+          p.name?.toLowerCase().includes(scannedSku.toLowerCase())
+        );
+        if (productByName) {
+          addToCart(productByName);
+          setError(null);
+        } else {
+          setError(`Product not found: ${scannedSku}`);
+        }
+      }
+      
+      // Clear the barcode input
+      setBarcodeInput('');
+    }
+  };
+
+  // Auto-focus barcode input when component mounts
+  useEffect(() => {
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  }, []);
+
+  // Auto-detect barcode when input stops changing (for scanners without Enter key)
+  useEffect(() => {
+    if (!barcodeInput || barcodeInput.length < 3) return;
+    
+    const timer = setTimeout(() => {
+      // Check if it's been at least 100ms since last keystroke (scanner is fast)
+      const now = Date.now();
+      if (now - lastBarcodeTime.current > 100) {
+        // Treat as scanner input - auto search
+        const scannedSku = barcodeInput.trim();
+        console.log('Auto-detecting SKU:', scannedSku);
+        
+        const product = products.find(p => 
+          p.sku === scannedSku || 
+          p.sku?.toLowerCase() === scannedSku.toLowerCase()
+        );
+        
+        if (product) {
+          addToCart(product);
+          setError(null);
+        } else {
+          // Try searching by name as fallback
+          const productByName = products.find(p => 
+            p.name?.toLowerCase().includes(scannedSku.toLowerCase())
+          );
+          if (productByName) {
+            addToCart(productByName);
+            setError(null);
+          }
+        }
+        
+        setBarcodeInput('');
+      }
+    }, 150);
+    
+    lastBarcodeTime.current = Date.now();
+    
+    return () => clearTimeout(timer);
+  }, [barcodeInput, products]);
+
   const handleCheckout = async () => {
     if (cart.length === 0) {
       setError('Cart is empty');
       return;
+    }
+
+    // Validate all items in cart before processing
+    for (const item of cart) {
+      // Check for invalid quantities
+      if (!item.quantity || item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+        setError(`Invalid quantity for ${item.name}`);
+        return;
+      }
+      
+      // Check if quantity exceeds available stock
+      const product = products.find(p => p.id === item.product);
+      if (!product) {
+        setError(`Product not found: ${item.name}`);
+        return;
+      }
+      if (item.quantity > product.stock_quantity) {
+        setError(`Insufficient stock for ${item.name}. Available: ${product.stock_quantity}, Requested: ${item.quantity}`);
+        return;
+      }
+      
+      // Check for invalid prices
+      if (item.price === null || item.price === undefined || item.price < 0 || isNaN(item.price)) {
+        setError(`Invalid price for ${item.name}`);
+        return;
+      }
     }
 
     setProcessing(true);
@@ -112,7 +258,7 @@ function Sales() {
       await salesAPI.create(saleData);
       clearCart();
       fetchData();
-      alert('Sale completed successfully!');
+      setSuccess('Sale completed successfully!');
     } catch (err) {
       setError('Failed to process sale: ' + (err.response?.data?.detail || err.message));
       console.error(err);
@@ -180,6 +326,42 @@ function Sales() {
       </header>
 
       {error && <div className="error" style={{ background: '#fee', color: '#c00', padding: '10px', borderRadius: '4px', marginBottom: '10px' }}>{error}</div>}
+
+      {success && (
+        <div style={{ 
+          background: '#d4edda', 
+          color: '#155724', 
+          padding: '12px 20px', 
+          borderRadius: '4px', 
+          marginBottom: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          border: '1px solid #c3e6cb',
+          animation: 'fadeIn 0.3s ease-in-out'
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>✓</span>
+          <span style={{ fontWeight: '500' }}>{success}</span>
+        </div>
+      )}
+
+      {/* Barcode Scanner Input */}
+      <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px', border: '2px solid #4a90e2' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#4a90e2' }}>
+          <i className="fas fa-barcode"></i> Scan Barcode / Enter SKU
+        </label>
+        <input
+          ref={barcodeInputRef}
+          type="text"
+          className="form-control"
+          style={{ fontSize: '1.5rem', padding: '12px', textAlign: 'center', fontWeight: 'bold' }}
+          placeholder="Click here and scan barcode..."
+          value={barcodeInput}
+          onChange={(e) => setBarcodeInput(e.target.value)}
+          onKeyDown={handleBarcodeScan}
+        />
+        <small style={{ color: '#666' }}>Scan barcode or type SKU and press Enter</small>
+      </div>
 
       <div className="pos-container">
         {/* Products Grid */}

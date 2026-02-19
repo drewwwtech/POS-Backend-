@@ -6,7 +6,12 @@ class DeliveryItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeliveryItem
-        fields = ['id', 'product_name', 'quantity', 'unit', 'received_quantity']
+        fields = ['id', 'product_name', 'quantity', 'unit', 'received_quantity', 'unit_cost', 'total_cost']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['total_cost'] = float(instance.total_cost) if instance.total_cost else 0
+        return data
 
 
 class DeliverySerializer(serializers.ModelSerializer):

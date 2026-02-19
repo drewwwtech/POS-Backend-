@@ -9,6 +9,22 @@ const api = axios.create({
   },
 });
 
+// Response interceptor to handle paginated responses
+api.interceptors.response.use(
+  (response) => {
+    // Check if response has pagination format
+    if (response.data && typeof response.data === 'object' && 'results' in response.data) {
+      // Return just the results array for list endpoints
+      return {
+        ...response,
+        data: response.data.results,
+      };
+    }
+    return response;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Inventory/Products API
 export const productsAPI = {
   getAll: () => api.get('/inventory/products/'),
@@ -16,6 +32,8 @@ export const productsAPI = {
   create: (data) => api.post('/inventory/products/', data),
   update: (id, data) => api.put(`/inventory/products/${id}/`, data),
   delete: (id) => api.delete(`/inventory/products/${id}/`),
+  lookup: (sku) => api.get('/inventory/products/lookup/', { params: { sku } }),
+  restock: (data) => api.post('/inventory/restock/', data),
 };
 
 // Categories API

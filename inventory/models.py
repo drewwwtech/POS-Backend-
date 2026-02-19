@@ -16,9 +16,8 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products', null=True, blank=True)
     name = models.CharField(max_length=255)
     sku = models.CharField(max_length=50, unique=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Cost price (base price)")
-    price_to_sell = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Selling price (if different from price)")
+    price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Selling price (retail price)")
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Cost price (wholesale price)")
     stock_quantity = models.PositiveIntegerField(default=0)
     reorder_level = models.IntegerField(default=10)
     is_active = models.BooleanField(default=True)
@@ -31,7 +30,7 @@ class Product(models.Model):
     def get_profit_margin(self):
         """Calculate profit margin percentage"""
         cost = self.base_price or 0
-        selling = self.price_to_sell or self.price or 0
+        selling = self.price or 0
         if selling > 0 and cost > 0:
             return ((selling - cost) / selling) * 100
         return 0
@@ -39,7 +38,7 @@ class Product(models.Model):
     def get_profit_amount(self):
         """Calculate profit amount per unit"""
         cost = self.base_price or 0
-        selling = self.price_to_sell or self.price or 0
+        selling = self.price or 0
         return selling - cost
 
 class StockLog(models.Model):

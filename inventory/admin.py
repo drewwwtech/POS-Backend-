@@ -7,7 +7,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'sku', 'stock_quantity', 'price', 'is_active')
+    list_display = ('name', 'sku', 'price', 'base_price', 'stock_quantity', 'is_active')
     search_fields = ('name', 'sku')
     list_filter = ('is_active', 'category')
     actions = ['deactivate_products', 'activate_products']
