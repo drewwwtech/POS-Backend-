@@ -13,5 +13,7 @@ pos_db
 __pycache__/
 *.pyc
 
-# Ignore frontend build cache (large files not needed in Git)
+# Ignore frontend dependencies and build output
+frontend/node_modules/
+frontend/build/
 frontend/node_modules/.cache/

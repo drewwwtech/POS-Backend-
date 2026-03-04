@@ -160,4 +160,13 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Serve React build static assets
+STATICFILES_DIRS = [
+    BASE_DIR / 'frontend' / 'build' / 'static',
+]
+
+# Serve React index.html as a template
+TEMPLATES[0]['DIRS'] = [BASE_DIR / 'frontend' / 'build']
