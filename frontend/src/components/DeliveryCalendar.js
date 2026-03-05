@@ -198,52 +198,54 @@ function DeliveryCalendar() {
   // PDF Generation
   const generatePDF = (delivery) => {
     const doc = new jsPDF();
-    
+
     // Header
     doc.setFontSize(20);
     doc.text('Delivery Receipt', 105, 20, { align: 'center' });
-    
+
     doc.setFontSize(12);
     doc.text(`Supplier: ${delivery.supplier_name}`, 20, 40);
     doc.text(`Date: ${delivery.delivery_date}`, 20, 50);
     doc.text(`Status: ${delivery.status}`, 20, 60);
-    
+
     if (delivery.notes) {
       doc.text(`Notes: ${delivery.notes}`, 20, 70);
     }
-    
+
     // Items table
     let yPos = 85;
     doc.setFontSize(14);
     doc.text('Items:', 20, yPos);
     yPos += 10;
-    
+
     doc.setFontSize(11);
     doc.text('#', 20, yPos);
     doc.text('Product', 30, yPos);
     doc.text('Qty', 120, yPos);
+    doc.text('Type', 145, yPos);
     yPos += 5;
     doc.line(20, yPos, 190, yPos);
     yPos += 8;
-    
+
     if (delivery.items && delivery.items.length > 0) {
       delivery.items.forEach((item, index) => {
         const productName = item.product_name || item.name || 'Unknown';
         doc.text(`${index + 1}`, 20, yPos);
         doc.text(productName, 30, yPos);
         doc.text(`${item.quantity}`, 120, yPos);
+        doc.text(`${item.unit || ''}`, 145, yPos);
         yPos += 8;
       });
     } else {
       doc.text('No items', 30, yPos);
     }
-    
+
     // Footer
     yPos += 20;
     doc.setFontSize(10);
     doc.text(`Generated: ${new Date().toLocaleString()}`, 20, yPos);
     doc.text('POS System', 190, yPos, { align: 'right' });
-    
+
     // Open PDF in modal for preview
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
@@ -313,10 +315,10 @@ function DeliveryCalendar() {
           {getMonthDays(currentDate).map((date, index) => {
             const dayDeliveries = getDeliveriesForDate(date);
             const isToday = date && date.toDateString() === new Date().toDateString();
-            
+
             return (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className={`calendar-day ${!date ? 'empty' : ''} ${isToday ? 'today' : ''}`}
                 onClick={() => date && dayDeliveries.length === 0 && openModal(null, date)}
               >
@@ -328,7 +330,7 @@ function DeliveryCalendar() {
                         <div
                           key={delivery.id}
                           className="delivery-dot"
-                          style={{ 
+                          style={{
                             backgroundColor: getStatusColor(delivery.status),
                             border: getStatusBorderColor(delivery.status),
                           }}
@@ -363,7 +365,7 @@ function DeliveryCalendar() {
             <h2>Delivery Details</h2>
             <button className="modal-close" onClick={() => setSelectedDelivery(null)}>×</button>
           </div>
-          
+
           <div className="delivery-info">
             <div className="info-row">
               <label>Supplier:</label>
@@ -408,6 +410,7 @@ function DeliveryCalendar() {
                   <tr>
                     <th>Product</th>
                     <th>Quantity</th>
+                    <th>Type</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -415,6 +418,7 @@ function DeliveryCalendar() {
                     <tr key={index}>
                       <td>{item.product_name || item.name || 'Unknown'}</td>
                       <td>{item.quantity}</td>
+                      <td>{item.unit || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -573,9 +577,9 @@ function DeliveryCalendar() {
               <button className="modal-close" onClick={closePdfModal}>×</button>
             </div>
             <div className="modal-body pdf-preview-container">
-              <iframe 
-                src={pdfUrl} 
-                title="PDF Preview" 
+              <iframe
+                src={pdfUrl}
+                title="PDF Preview"
                 className="pdf-iframe"
               />
             </div>
