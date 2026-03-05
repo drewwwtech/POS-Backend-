@@ -20,6 +20,14 @@ function Products() {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  
+  // Category modal state
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoryFormData, setCategoryFormData] = useState({
+    name: '',
+    description: '',
+  });
 
   // Scanner state
   const [scannerSku, setScannerSku] = useState('');
@@ -167,6 +175,72 @@ function Products() {
     setShowModal(false);
     setEditingProduct(null);
     setError(null);
+  };
+
+  const openCategoryModal = (category = null) => {
+    if (category) {
+      setEditingCategory(category);
+      setCategoryFormData({
+        name: category.name || '',
+        description: category.description || '',
+      });
+    } else {
+      setEditingCategory(null);
+      setCategoryFormData({
+        name: '',
+        description: '',
+      });
+    }
+    setShowCategoryModal(true);
+  };
+
+  const closeCategoryModal = () => {
+    setShowCategoryModal(false);
+    setEditingCategory(null);
+    setError(null);
+  };
+
+  const handleCategorySubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!categoryFormData.name.trim()) {
+      setError('Category name is required');
+      return;
+    }
+    
+    try {
+      const data = {
+        name: categoryFormData.name.trim(),
+        description: categoryFormData.description.trim(),
+      };
+
+      if (editingCategory) {
+        await categoriesAPI.update(editingCategory.id, data);
+        showToast(`✅ Updated category: ${data.name}`);
+      } else {
+        await categoriesAPI.create(data);
+        showToast(`✅ Created category: ${data.name}`);
+      }
+
+      closeCategoryModal();
+      fetchData();
+    } catch (err) {
+      setError('Failed to save category: ' + (err.response?.data?.name || err.response?.data?.detail || JSON.stringify(err.response?.data) || err.message));
+      console.error(err);
+    }
+  };
+
+  const handleCategoryDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this category? This will not delete products assigned to it.')) {
+      return;
+    }
+    try {
+      await categoriesAPI.delete(id);
+      fetchData();
+    } catch (err) {
+      setError('Failed to delete category');
+      console.error(err);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -402,9 +476,14 @@ function Products() {
             ))}
           </select>
         </div>
-        <button className="btn btn-success" onClick={() => openModal()} style={{ whiteSpace: 'nowrap' }}>
-          <i className="fas fa-plus"></i> Add Product
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn btn-secondary" onClick={() => openCategoryModal()} style={{ whiteSpace: 'nowrap' }}>
+            <i className="fas fa-plus"></i> Add Category
+          </button>
+          <button className="btn btn-success" onClick={() => openModal()} style={{ whiteSpace: 'nowrap' }}>
+            <i className="fas fa-plus"></i> Add Product
+          </button>
+        </div>
       </div>
 
       {error && <div className="error" style={{ marginBottom: '10px' }}>{error}</div>}
@@ -475,7 +554,7 @@ function Products() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Product Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={closeModal}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -591,6 +670,49 @@ function Products() {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   {editingProduct ? 'Update' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Category Modal */}
+      {showCategoryModal && (
+        <div className="modal-overlay" onClick={closeCategoryModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingCategory ? 'Edit Category' : 'Add New Category'}</h2>
+              <button className="modal-close" onClick={closeCategoryModal}>×</button>
+            </div>
+            <form onSubmit={handleCategorySubmit}>
+              <div className="form-group">
+                <label>Category Name *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={categoryFormData.name}
+                  onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
+                  placeholder="Enter category name"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  className="form-control"
+                  value={categoryFormData.description}
+                  onChange={(e) => setCategoryFormData({ ...categoryFormData, description: e.target.value })}
+                  rows="3"
+                  placeholder="Optional description for this category"
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={closeCategoryModal}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {editingCategory ? 'Update' : 'Create'}
                 </button>
               </div>
             </form>
