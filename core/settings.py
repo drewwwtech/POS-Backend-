@@ -175,3 +175,11 @@ STATICFILES_DIRS = [
 
 # Serve React index.html as a template
 TEMPLATES[0]['DIRS'] = [BASE_DIR / 'frontend' / 'build']
+
+# Add static files serving for development
+from django.conf import settings
+from django.conf.urls.static import static
+
+# This will be added to urlpatterns in urls.py for development
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
