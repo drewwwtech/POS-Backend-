@@ -64,6 +64,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -173,5 +174,22 @@ STATICFILES_DIRS = [
     BASE_DIR / 'frontend' / 'build' / 'static',
 ]
 
+# Additional static files directories for WhiteNoise
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
 # Serve React index.html as a template
-TEMPLATES[0]['DIRS'] = [BASE_DIR / 'frontend' / 'build']
+TEMPLATES[0]['DIRS'] = [BASE_DIR / 'core' / 'templates']
+
+# WhiteNoise configuration for static files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# WhiteNoise configuration
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = True
+
+# Additional WhiteNoise settings for production
+WHITENOISE_STATIC_PREFIX = '/static/'
+WHITENOISE_INDEX_FILE = True
