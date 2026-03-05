@@ -136,6 +136,13 @@ function DeliveryCalendar() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validation: must have at least one item
+    if (formData.items.length === 0) {
+      setError('Please add at least one item before saving the delivery.');
+      return;
+    }
+
     try {
       if (editingDelivery) {
         await deliveriesAPI.update(editingDelivery.id, formData);
@@ -197,6 +204,7 @@ function DeliveryCalendar() {
 
   // PDF Generation
   const generatePDF = (delivery) => {
+    console.log('PDF items:', JSON.stringify(delivery.items, null, 2));
     const doc = new jsPDF();
 
     // Header

@@ -36,6 +36,12 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
 ]
+CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+]
 
 
 # Application definition
@@ -124,9 +130,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',  # TODO: Change to IsAuthenticated before deployment!
     ],
-    # Authentication methods - add TokenAuthentication for production
+    # Authentication methods - SessionAuthentication removed to avoid CSRF enforcement
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',  # For browsable API
         'rest_framework.authentication.BasicAuthentication',    # For API testing
     ],
     # Pagination settings
