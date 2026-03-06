@@ -43,7 +43,9 @@ class Delivery(models.Model):
     @property
     def is_overdue(self):
         """Check if delivery is overdue"""
-        if self.status in ['PENDING', 'SENT'] and self.delivery_date < timezone.now().date():
+        from datetime import date
+        today = date.today()
+        if self.status in ['PENDING', 'SENT'] and self.delivery_date < today:
             return True
         return False
 

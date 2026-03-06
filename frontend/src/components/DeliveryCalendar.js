@@ -146,24 +146,50 @@ function DeliveryCalendar() {
     try {
       if (editingDelivery) {
         await deliveriesAPI.update(editingDelivery.id, formData);
+        console.log('Delivery updated successfully:', formData);
       } else {
         await deliveriesAPI.create(formData);
+        console.log('Delivery created successfully:', formData);
       }
       closeModal();
       fetchData();
     } catch (err) {
-      setError('Failed to save delivery: ' + (err.response?.data?.detail || err.message));
-      console.error(err);
+      console.error('Error saving delivery:', err);
+      setError('Failed to save delivery: ' + (err.response?.data?.detail || err.message || err.toString()));
     }
   };
 
   const handleStatusChange = async (deliveryId, newStatus) => {
     try {
-      await deliveriesAPI.update(deliveryId, { status: newStatus });
+      console.log('Updating status for delivery:', deliveryId, 'to:', newStatus);
+      
+      // First update the status
+      const updateResponse = await deliveriesAPI.update(deliveryId, { status: newStatus });
+      console.log('Status update response:', updateResponse);
+      
+      // Then fetch the updated delivery data
+      const response = await deliveriesAPI.getById(deliveryId);
+      console.log('Get delivery response:', response);
+      
+      // Handle both direct data and paginated response formats
+      const deliveryData = response.data.results ? response.data.results[0] : response.data;
+      console.log('Delivery data to set:', deliveryData);
+      
+      if (deliveryData) {
+        setSelectedDelivery(deliveryData);
+        console.log('Selected delivery updated successfully');
+      } else {
+        console.error('No delivery data received');
+      }
+      
+      // Refresh the full list
       fetchData();
+      console.log('Full delivery list refreshed');
+      
     } catch (err) {
-      setError('Failed to update status');
-      console.error(err);
+      console.error('Error updating status:', err);
+      console.error('Error details:', err.response?.data);
+      setError('Failed to update status: ' + (err.response?.data?.detail || err.message || err.toString()));
     }
   };
 

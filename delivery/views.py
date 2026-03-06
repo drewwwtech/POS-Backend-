@@ -117,7 +117,8 @@ class UpdateOverdueDeliveriesAPI(APIView):
     """
 
     def post(self, request):
-        today = timezone.now().date()
+        from datetime import date
+        today = date.today()
         
         # Get overdue deliveries
         overdue = Delivery.objects.filter(
@@ -127,9 +128,17 @@ class UpdateOverdueDeliveriesAPI(APIView):
         
         updated_count = 0
         for delivery in overdue:
-            delivery.status = 'PROBLEM'
-            delivery.save()
-            updated_count += 1
+            # Only update if not already marked as problem
+            if delivery.status != 'PROBLEM':
+                delivery.status = 'PROBLEM'
+                # Add "Over Due" to remarks if not already present
+                if 'Over Due' not in delivery.remarks:
+                    if delivery.remarks:
+                        delivery.remarks += " | Over Due"
+                    else:
+                        delivery.remarks = "Over Due"
+                delivery.save()
+                updated_count += 1
 
         return Response({
             "message": f"Updated {updated_count} overdue deliveries",
