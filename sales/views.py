@@ -525,7 +525,7 @@ def generate_daily_report_pdf(request):
     sales = Sale.objects.filter(timestamp__date=target_date).order_by('timestamp')
     
     if not sales.exists():
-        return HttpResponse("No sales recorded for this date.", status=404)
+        return HttpResponse("There's no sales today", status=404)
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Daily_Sales_{target_date}.pdf"'
@@ -644,7 +644,7 @@ def generate_monthly_report_pdf(request):
     ).order_by('timestamp')
     
     if not sales.exists():
-        return HttpResponse("No sales recorded for this month.", status=404)
+        return HttpResponse("There's no sales this month", status=404)
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Monthly_Sales_{year}_{month}.pdf"'
@@ -740,7 +740,7 @@ def generate_yearly_report_pdf(request):
     ).order_by('timestamp')
     
     if not sales.exists():
-        return HttpResponse("No sales recorded for this year.", status=404)
+        return HttpResponse("There's no sales this year", status=404)
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Yearly_Sales_{year}.pdf"'
@@ -844,7 +844,7 @@ def generate_range_report_pdf(request):
     ).order_by('timestamp')
     
     if not sales.exists():
-        return HttpResponse("No sales recorded for this date range.", status=404)
+        return HttpResponse("There's no sales in this date range", status=404)
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Sales_Range_{start_date_str}_to_{end_date_str}.pdf"'
