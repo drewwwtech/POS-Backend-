@@ -212,56 +212,6 @@ def generate_receipt(request, transaction_id):
     p.save()
     return response # FIXED: Now returns the PDF file
 
-def generate_daily_report_pdf(request):
-    """Generates a PDF of all sales made today"""
-    today = timezone.now().date()
-    sales_today = Sale.objects.filter(timestamp__date=today).order_by('timestamp')
-    
-    if not sales_today.exists():
-        return HttpResponse("No sales recorded for today.", status=404)
-
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="Daily_Sales_{today}.pdf"'
-    
-    p = canvas.Canvas(response)
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(100, 800, f"JMC STORE - DAILY SALES REPORT")
-    
-    p.setFont("Helvetica", 12)
-    p.drawString(100, 780, f"Date: {today}")
-    p.line(100, 770, 500, 770)
-    
-    y = 750
-    p.setFont("Helvetica-Bold", 10)
-    p.drawString(100, y, "Time")
-    p.drawString(180, y, "Transaction ID")
-    p.drawString(350, y, "Amount")
-    y -= 20
-    p.setFont("Helvetica", 10)
-
-    total_revenue = 0
-    for sale in sales_today:
-        # If we run out of page space, start a new one (basic check)
-        if y < 50:
-            p.showPage()
-            y = 800
-            
-        p.drawString(100, y, sale.timestamp.strftime('%H:%M'))
-        p.drawString(180, y, sale.transaction_id)
-        p.drawString(350, y, f"PHP {sale.total_amount}")
-        total_revenue += sale.total_amount
-        y -= 15
-        
-    p.line(100, y, 500, y)
-    y -= 20
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(100, y, f"TOTAL DAILY REVENUE: PHP {total_revenue}")
-    p.drawString(100, y-15, f"TOTAL TRANSACTIONS: {sales_today.count()}")
-    
-    p.showPage()
-    p.save()
-    return response
-
 # ============================================
 # SALES REPORT APIs
 # ============================================
@@ -555,3 +505,413 @@ class SalesRangeReportAPI(APIView):
             'average_per_transaction': total_sales / transaction_count if transaction_count > 0 else 0,
             'products': products_detail
         })
+
+
+# ============================================
+# PDF REPORT GENERATION APIs
+# ============================================
+
+def generate_daily_report_pdf(request):
+    """Generate PDF for daily sales report"""
+    date_str = request.GET.get('date')
+    if not date_str:
+        target_date = timezone.now().date()
+    else:
+        try:
+            target_date = timezone.datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return HttpResponse("Invalid date format. Use YYYY-MM-DD", status=400)
+    
+    sales = Sale.objects.filter(timestamp__date=target_date).order_by('timestamp')
+    
+    if not sales.exists():
+        return HttpResponse("No sales recorded for this date.", status=404)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Daily_Sales_{target_date}.pdf"'
+    
+    p = canvas.Canvas(response)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(100, 800, f"JMC STORE - DAILY SALES REPORT")
+    
+    p.setFont("Helvetica", 12)
+    p.drawString(100, 780, f"Date: {target_date}")
+    p.line(100, 770, 500, 770)
+    
+    # Calculate totals
+    total_revenue = sum(s.total_amount for s in sales)
+    transaction_count = sales.count()
+    
+    # Calculate Gross Sales and Net Income
+    gross_sales = float(total_revenue)
+    total_cost = 0
+    
+    items_sold = SaleItem.objects.filter(
+        sale__timestamp__date=target_date
+    ).select_related('product')
+    
+    product_sales = {}
+    for item in items_sold:
+        key = item.product.name if item.product else 'Unknown'
+        if key not in product_sales:
+            product_sales[key] = {'quantity': 0, 'total': 0}
+        product_sales[key]['quantity'] += item.quantity
+        product_sales[key]['total'] += float(item.unit_price) * item.quantity
+        
+        # Calculate cost of goods sold
+        base_price = float(item.product.base_price) if item.product and item.product.base_price else 0
+        total_cost += base_price * item.quantity
+    
+    net_income = gross_sales - total_cost
+    
+    y = 750
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "SUMMARY")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    p.drawString(100, y, f"Gross Sales: PHP {gross_sales:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Total Cost: PHP {total_cost:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Net Income: PHP {net_income:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Transaction Count: {transaction_count}")
+    y -= 20
+    
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "TOP PRODUCTS")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    
+    top_products = sorted(
+        [{'product_name': k, 'quantity': v['quantity'], 'total': v['total']} 
+         for k, v in product_sales.items()],
+        key=lambda x: x['quantity'],
+        reverse=True
+    )[:5]
+    
+    for product in top_products:
+        p.drawString(100, y, f"{product['product_name']}: {product['quantity']} units - PHP {product['total']:,.2f}")
+        y -= 15
+    
+    y -= 10
+    p.line(100, y, 500, y)
+    y -= 20
+    
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "TRANSACTIONS")
+    y -= 20
+    p.setFont("Helvetica", 10)
+
+    for sale in sales:
+        if y < 50:
+            p.showPage()
+            y = 800
+            
+        p.drawString(100, y, f"{sale.timestamp.strftime('%H:%M')} - {sale.transaction_id} - PHP {sale.total_amount:,.2f}")
+        y -= 15
+        
+    p.showPage()
+    p.save()
+    return response
+
+
+def generate_monthly_report_pdf(request):
+    """Generate PDF for monthly sales report"""
+    year = request.GET.get('year')
+    month = request.GET.get('month')
+    
+    if not year or not month:
+        now = timezone.now()
+        year = now.year
+        month = now.month
+    else:
+        try:
+            year = int(year)
+            month = int(month)
+        except ValueError:
+            return HttpResponse("Invalid year or month", status=400)
+    
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1)
+    else:
+        end_date = date(year, month + 1, 1)
+    
+    sales = Sale.objects.filter(
+        timestamp__date__gte=start_date,
+        timestamp__date__lt=end_date
+    ).order_by('timestamp')
+    
+    if not sales.exists():
+        return HttpResponse("No sales recorded for this month.", status=404)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Monthly_Sales_{year}_{month}.pdf"'
+    
+    p = canvas.Canvas(response)
+    p.setFont("Helvetica-Bold", 16)
+    month_names = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December']
+    p.drawString(100, 800, f"JMC STORE - MONTHLY SALES REPORT")
+    p.drawString(100, 780, f"Month: {month_names[month-1]} {year}")
+    p.line(100, 770, 500, 770)
+    
+    # Calculate totals
+    total_revenue = sum(s.total_amount for s in sales)
+    transaction_count = sales.count()
+    
+    # Calculate Gross Sales and Net Income
+    gross_sales = float(total_revenue)
+    total_cost = 0
+    
+    items_sold = SaleItem.objects.filter(
+        sale__timestamp__date__gte=start_date,
+        sale__timestamp__date__lt=end_date
+    ).select_related('product')
+    
+    daily_data = {}
+    for sale in sales:
+        day = sale.timestamp.date()
+        if day not in daily_data:
+            daily_data[day] = {'total': 0, 'count': 0}
+        daily_data[day]['total'] += float(sale.total_amount)
+        daily_data[day]['count'] += 1
+    
+    best_day = max(daily_data.items(), key=lambda x: x[1]['total']) if daily_data else None
+    
+    for item in items_sold:
+        base_price = float(item.product.base_price) if item.product and item.product.base_price else 0
+        total_cost += base_price * item.quantity
+    
+    net_income = gross_sales - total_cost
+    
+    y = 750
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "SUMMARY")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    p.drawString(100, y, f"Gross Sales: PHP {gross_sales:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Total Cost: PHP {total_cost:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Net Income: PHP {net_income:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Transaction Count: {transaction_count}")
+    y -= 15
+    if best_day:
+        p.drawString(100, y, f"Best Day: {best_day[0]} - PHP {best_day[1]['total']:,.2f}")
+        y -= 15
+    else:
+        y -= 15
+    
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "DAILY BREAKDOWN")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    
+    for day, data in sorted(daily_data.items()):
+        p.drawString(100, y, f"{day}: PHP {data['total']:,.2f} ({data['count']} transactions)")
+        y -= 15
+    
+    p.showPage()
+    p.save()
+    return response
+
+
+def generate_yearly_report_pdf(request):
+    """Generate PDF for yearly sales report"""
+    year = request.GET.get('year')
+    
+    if not year:
+        year = timezone.now().year
+    else:
+        try:
+            year = int(year)
+        except ValueError:
+            return HttpResponse("Invalid year", status=400)
+    
+    start_date = date(year, 1, 1)
+    end_date = date(year + 1, 1, 1)
+    
+    sales = Sale.objects.filter(
+        timestamp__date__gte=start_date,
+        timestamp__date__lt=end_date
+    ).order_by('timestamp')
+    
+    if not sales.exists():
+        return HttpResponse("No sales recorded for this year.", status=404)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Yearly_Sales_{year}.pdf"'
+    
+    p = canvas.Canvas(response)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(100, 800, f"JMC STORE - YEARLY SALES REPORT")
+    p.drawString(100, 780, f"Year: {year}")
+    p.line(100, 770, 500, 770)
+    
+    # Calculate totals
+    total_revenue = sum(s.total_amount for s in sales)
+    transaction_count = sales.count()
+    
+    # Calculate Gross Sales and Net Income
+    gross_sales = float(total_revenue)
+    total_cost = 0
+    
+    items_sold = SaleItem.objects.filter(
+        sale__timestamp__date__gte=start_date,
+        sale__timestamp__date__lt=end_date
+    ).select_related('product')
+    
+    monthly_data = {}
+    for sale in sales:
+        month = sale.timestamp.month
+        if month not in monthly_data:
+            monthly_data[month] = {'total': 0, 'count': 0}
+        monthly_data[month]['total'] += float(sale.total_amount)
+        monthly_data[month]['count'] += 1
+    
+    best_month = max(monthly_data.items(), key=lambda x: x[1]['total']) if monthly_data else None
+    
+    for item in items_sold:
+        base_price = float(item.product.base_price) if item.product and item.product.base_price else 0
+        total_cost += base_price * item.quantity
+    
+    net_income = gross_sales - total_cost
+    
+    y = 750
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "SUMMARY")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    p.drawString(100, y, f"Gross Sales: PHP {gross_sales:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Total Cost: PHP {total_cost:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Net Income: PHP {net_income:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Transaction Count: {transaction_count}")
+    y -= 15
+    if best_month:
+        month_names = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December']
+        p.drawString(100, y, f"Best Month: {month_names[best_month[0]-1]} - PHP {best_month[1]['total']:,.2f}")
+        y -= 15
+    else:
+        y -= 15
+    
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "MONTHLY BREAKDOWN")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    
+    month_names = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December']
+    
+    for month in range(1, 13):
+        if month in monthly_data:
+            data = monthly_data[month]
+            p.drawString(100, y, f"{month_names[month-1]}: PHP {data['total']:,.2f} ({data['count']} transactions)")
+        else:
+            p.drawString(100, y, f"{month_names[month-1]}: PHP 0.00 (0 transactions)")
+        y -= 15
+    
+    p.showPage()
+    p.save()
+    return response
+
+
+def generate_range_report_pdf(request):
+    """Generate PDF for custom date range sales report"""
+    start_date_str = request.GET.get('start')
+    end_date_str = request.GET.get('end')
+    
+    if not start_date_str or not end_date_str:
+        return HttpResponse("Start and end dates are required", status=400)
+    
+    try:
+        start_date = timezone.datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = timezone.datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return HttpResponse("Invalid date format. Use YYYY-MM-DD", status=400)
+    
+    end_date = end_date + timedelta(days=1)
+    
+    sales = Sale.objects.filter(
+        timestamp__date__gte=start_date,
+        timestamp__date__lt=end_date
+    ).order_by('timestamp')
+    
+    if not sales.exists():
+        return HttpResponse("No sales recorded for this date range.", status=404)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Sales_Range_{start_date_str}_to_{end_date_str}.pdf"'
+    
+    p = canvas.Canvas(response)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(100, 800, f"JMC STORE - SALES REPORT")
+    p.drawString(100, 780, f"Date Range: {start_date_str} to {end_date_str}")
+    p.line(100, 770, 500, 770)
+    
+    # Calculate totals
+    total_revenue = sum(s.total_amount for s in sales)
+    transaction_count = sales.count()
+    
+    # Calculate Gross Sales and Net Income
+    gross_sales = float(total_revenue)
+    total_cost = 0
+    product_sales = {}
+    
+    items_sold = SaleItem.objects.filter(
+        sale__timestamp__date__gte=start_date,
+        sale__timestamp__date__lt=end_date
+    ).select_related('product')
+    
+    for item in items_sold:
+        key = item.product.name if item.product else 'Unknown'
+        if key not in product_sales:
+            product_sales[key] = {'quantity': 0, 'total': 0}
+        product_sales[key]['quantity'] += item.quantity
+        product_sales[key]['total'] += float(item.unit_price) * item.quantity
+        
+        # Calculate cost of goods sold
+        base_price = float(item.product.base_price) if item.product and item.product.base_price else 0
+        total_cost += base_price * item.quantity
+    
+    net_income = gross_sales - total_cost
+    
+    products_detail = sorted(
+        [{'product_name': k, 'quantity': v['quantity'], 'total': v['total']} 
+         for k, v in product_sales.items()],
+        key=lambda x: x['total'],
+        reverse=True
+    )
+    
+    y = 750
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "SUMMARY")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    p.drawString(100, y, f"Gross Sales: PHP {gross_sales:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Total Cost: PHP {total_cost:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Net Income: PHP {net_income:,.2f}")
+    y -= 15
+    p.drawString(100, y, f"Transaction Count: {transaction_count}")
+    y -= 20
+    
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(100, y, "PRODUCTS")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    
+    for product in products_detail:
+        p.drawString(100, y, f"{product['product_name']}: {product['quantity']} units - PHP {product['total']:,.2f}")
+        y -= 15
+    
+    p.showPage()
+    p.save()
+    return response

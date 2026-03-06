@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { salesAPI } from '../services/api';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
+import jsPDF from 'jspdf';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
@@ -79,6 +80,53 @@ function Reports() {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',
                     'July', 'August', 'September', 'October', 'November', 'December'];
     return months[month - 1] || '';
+  };
+
+  const downloadPDF = async () => {
+    try {
+      let response;
+      let filename = '';
+
+      switch (reportType) {
+        case 'daily':
+          response = await salesAPI.getDailyReportPDF(selectedDate);
+          filename = `Daily_Sales_Report_${selectedDate}.pdf`;
+          break;
+        case 'monthly':
+          response = await salesAPI.getMonthlyReportPDF(selectedYear, selectedMonth);
+          const monthName = getMonthName(selectedMonth);
+          filename = `Monthly_Sales_Report_${monthName}_${selectedYear}.pdf`;
+          break;
+        case 'yearly':
+          response = await salesAPI.getYearlyReportPDF(selectedYear);
+          filename = `Yearly_Sales_Report_${selectedYear}.pdf`;
+          break;
+        case 'range':
+          if (!startDate || !endDate) {
+            setError('Please select start and end dates');
+            return;
+          }
+          response = await salesAPI.getRangeReportPDF(startDate, endDate);
+          filename = `Sales_Report_${startDate}_to_${endDate}.pdf`;
+          break;
+        default:
+          return;
+      }
+
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('Failed to download PDF: ' + (err.response?.data?.detail || err.message));
+      console.error(err);
+    }
   };
 
   return (
@@ -204,6 +252,15 @@ function Reports() {
           >
             Apply
           </button>
+          {reportData && (
+            <button
+              className="btn btn-success"
+              onClick={downloadPDF}
+              style={{ marginLeft: '10px' }}
+            >
+              <i className="fas fa-download"></i> Download PDF
+            </button>
+          )}
         </div>
       </div>
 

@@ -6,6 +6,9 @@ from .views import (
     ReceiptDetailView, 
     generate_receipt,
     generate_daily_report_pdf,
+    generate_monthly_report_pdf,
+    generate_yearly_report_pdf,
+    generate_range_report_pdf,
     DailySalesReportAPI,
     MonthlySalesReportAPI,
     YearlySalesReportAPI,
@@ -39,4 +42,10 @@ urlpatterns = [
     path('report/monthly/', MonthlySalesReportAPI.as_view(), name='report-monthly'),
     path('report/yearly/', YearlySalesReportAPI.as_view(), name='report-yearly'),
     path('report/range/', SalesRangeReportAPI.as_view(), name='report-range'),
+
+    # PDF Report Endpoints
+    path('report/daily/pdf/', generate_daily_report_pdf, name='report-daily-pdf'),
+    path('report/monthly/pdf/', generate_monthly_report_pdf, name='report-monthly-pdf'),
+    path('report/yearly/pdf/', generate_yearly_report_pdf, name='report-yearly-pdf'),
+    path('report/range/pdf/', generate_range_report_pdf, name='report-range-pdf'),
 ]

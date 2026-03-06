@@ -58,6 +58,11 @@ export const salesAPI = {
   getMonthlyReport: (year, month) => api.get('/sales/report/monthly/', { params: { year, month } }),
   getYearlyReport: (year) => api.get('/sales/report/yearly/', { params: { year } }),
   getRangeReport: (start, end) => api.get('/sales/report/range/', { params: { start, end } }),
+  // PDF Report Endpoints
+  getDailyReportPDF: (date) => api.get('/sales/report/daily/pdf/', { params: { date }, responseType: 'blob' }),
+  getMonthlyReportPDF: (year, month) => api.get('/sales/report/monthly/pdf/', { params: { year, month }, responseType: 'blob' }),
+  getYearlyReportPDF: (year) => api.get('/sales/report/yearly/pdf/', { params: { year }, responseType: 'blob' }),
+  getRangeReportPDF: (start, end) => api.get('/sales/report/range/pdf/', { params: { start, end }, responseType: 'blob' }),
 };
 
 // Deliveries API
