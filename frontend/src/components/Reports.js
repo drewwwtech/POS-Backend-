@@ -11,8 +11,13 @@ function Reports() {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const getLocalDateString = () => {
+    const _now = new Date();
+    return `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [startDate, setStartDate] = useState('');
@@ -78,7 +83,7 @@ function Reports() {
 
   const getMonthName = (month) => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                    'July', 'August', 'September', 'October', 'November', 'December'];
+      'July', 'August', 'September', 'October', 'November', 'December'];
     return months[month - 1] || '';
   };
 
@@ -278,7 +283,7 @@ function Reports() {
           <div className="stats-grid">
             <div className="stat-card">
               <h3>
-                <i className="fas fa-peso-sign" style={{color: '#4a90e2'}}></i>
+                <i className="fas fa-peso-sign" style={{ color: '#4a90e2' }}></i>
                 Gross Sales
               </h3>
               <p className="stat-value" style={{ color: '#4a90e2' }}>
@@ -288,7 +293,7 @@ function Reports() {
 
             <div className="stat-card">
               <h3>
-                <i className="fas fa-coins" style={{color: '#48bb78'}}></i>
+                <i className="fas fa-coins" style={{ color: '#48bb78' }}></i>
                 Net Income
               </h3>
               <p className="stat-value" style={{ color: '#48bb78' }}>
@@ -298,7 +303,7 @@ function Reports() {
 
             <div className="stat-card">
               <h3>
-                <i className="fas fa-receipt" style={{color: '#9b59b6'}}></i>
+                <i className="fas fa-receipt" style={{ color: '#9b59b6' }}></i>
                 Transactions
               </h3>
               <p className="stat-value" style={{ color: '#9b59b6' }}>
@@ -309,7 +314,7 @@ function Reports() {
             {reportData.best_day && (
               <div className="stat-card">
                 <h3>
-                  <i className="fas fa-trophy" style={{color: '#9b59b6'}}></i>
+                  <i className="fas fa-trophy" style={{ color: '#9b59b6' }}></i>
                   Best Day
                 </h3>
                 <p className="stat-value" style={{ fontSize: '1.2rem' }}>
@@ -322,7 +327,7 @@ function Reports() {
             {reportData.best_month && (
               <div className="stat-card">
                 <h3>
-                  <i className="fas fa-trophy" style={{color: '#9b59b6'}}></i>
+                  <i className="fas fa-trophy" style={{ color: '#9b59b6' }}></i>
                   Best Month
                 </h3>
                 <p className="stat-value" style={{ fontSize: '1.2rem' }}>

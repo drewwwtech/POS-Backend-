@@ -33,7 +33,7 @@ class SaleListAPI(generics.ListCreateAPIView):
 class DashboardSummaryAPI(APIView):
     def get(self, request):
         # Get today's date
-        today = timezone.now().date()
+        today = timezone.localdate()
         
         # Get first day of current month
         month_start = today.replace(day=1)
@@ -106,7 +106,7 @@ class DashboardSummaryAPI(APIView):
 class DailyClosingReportAPI(APIView):
     def get(self, request):
         # Uses your fixed TIME_ZONE setting automatically
-        today = timezone.now().date()
+        today = timezone.localdate()
         sales_today = Sale.objects.filter(timestamp__date=today)
         
         total_revenue = sales_today.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
@@ -125,7 +125,7 @@ class DailyClosingReportAPI(APIView):
 # 4. Sales Chart API - Returns daily sales for the past 30 days
 class SalesChartAPI(APIView):
     def get(self, request):
-        today = timezone.now().date()
+        today = timezone.localdate()
         # Get sales for the last 30 days
         start_date = today - timedelta(days=29)
         
@@ -221,7 +221,7 @@ class DailySalesReportAPI(APIView):
     def get(self, request):
         date_str = request.query_params.get('date')
         if not date_str:
-            target_date = timezone.now().date()
+            target_date = timezone.localdate()
         else:
             try:
                 target_date = timezone.datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -304,7 +304,7 @@ class MonthlySalesReportAPI(APIView):
         month = request.query_params.get('month')
         
         if not year or not month:
-            now = timezone.now()
+            now = timezone.localtime()
             year = now.year
             month = now.month
         else:
@@ -378,7 +378,7 @@ class YearlySalesReportAPI(APIView):
         year = request.query_params.get('year')
         
         if not year:
-            year = timezone.now().year
+            year = timezone.localtime().year
         else:
             try:
                 year = int(year)
@@ -515,7 +515,7 @@ def generate_daily_report_pdf(request):
     """Generate PDF for daily sales report"""
     date_str = request.GET.get('date')
     if not date_str:
-        target_date = timezone.now().date()
+        target_date = timezone.localdate()
     else:
         try:
             target_date = timezone.datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -622,7 +622,7 @@ def generate_monthly_report_pdf(request):
     month = request.GET.get('month')
     
     if not year or not month:
-        now = timezone.now()
+        now = timezone.localtime()
         year = now.year
         month = now.month
     else:
@@ -724,7 +724,7 @@ def generate_yearly_report_pdf(request):
     year = request.GET.get('year')
     
     if not year:
-        year = timezone.now().year
+        year = timezone.localtime().year
     else:
         try:
             year = int(year)
