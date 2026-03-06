@@ -295,9 +295,23 @@ function Products() {
     try {
       await productsAPI.delete(id);
       fetchData();
+      showToast('✅ Product deleted successfully');
     } catch (err) {
-      setError('Failed to delete product');
-      console.error(err);
+      // Try to get the specific error message from the server
+      const errorMessage = err.response?.data?.error || 
+                          err.response?.data?.detail || 
+                          'Failed to delete product';
+      setError(errorMessage);
+      console.error('Delete error:', err);
+      
+      // Show a more user-friendly message
+      if (errorMessage.includes('sales transactions')) {
+        setError('Cannot delete product: It has been used in sales transactions. Consider deactivating it instead.');
+      } else if (errorMessage.includes('deliveries')) {
+        setError('Cannot delete product: It has been used in deliveries. Consider deactivating it instead.');
+      } else {
+        setError(errorMessage);
+      }
     }
   };
 

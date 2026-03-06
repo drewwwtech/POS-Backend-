@@ -16,6 +16,47 @@ class ProductListAPI(generics.ListCreateAPIView):
 class ProductDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer # Scanner will type into this field
+    
+    def delete(self, request, *args, **kwargs):
+        """Override delete to provide better error handling"""
+        try:
+            instance = self.get_object()
+            
+            # Check if product has any related sales or deliveries
+            if hasattr(instance, 'items') and instance.items.exists():
+                return Response(
+                    {"error": "Cannot delete product: It has been used in sales transactions"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if hasattr(instance, 'delivery_items') and instance.delivery_items.exists():
+                return Response(
+                    {"error": "Cannot delete product: It has been used in deliveries"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check for stock logs (this is the missing check)
+            if hasattr(instance, 'stock_logs') and instance.stock_logs.exists():
+                return Response(
+                    {"error": "Cannot delete product: It has stock movement history. Consider deactivating it instead."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Try to delete the product
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        except Exception as e:
+            # Log the full error for debugging
+            import traceback
+            print(f"Product deletion error: {str(e)}")
+            print(f"Full traceback: {traceback.format_exc()}")
+            
+            # Return a more generic error message to avoid exposing internal details
+            return Response(
+                {"error": "Failed to delete the product. Please check server logs for details."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # Category APIs
 class CategoryListAPI(generics.ListCreateAPIView):
