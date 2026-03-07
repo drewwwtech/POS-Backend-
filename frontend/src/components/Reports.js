@@ -438,30 +438,7 @@ function Reports() {
             </div>
           )}
 
-          {/* Hourly Breakdown (Daily) */}
-          {reportData.hourly_breakdown && reportData.hourly_breakdown.length > 0 && (
-            <div className="dashboard-section" style={{ marginTop: '20px' }}>
-              <h2>Hourly Breakdown</h2>
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Hour</th>
-                      <th style={{ textAlign: 'right' }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reportData.hourly_breakdown.map((hour, index) => (
-                      <tr key={index}>
-                        <td>{hour.hour}:00</td>
-                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(hour.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+
         </>
       ) : (
         <div className="empty-state">Select a report type and date to view sales data</div>
