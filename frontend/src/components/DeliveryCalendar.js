@@ -45,8 +45,21 @@ function DeliveryCalendar() {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
+  const isOverdue = (delivery) => {
+    if (!delivery.delivery_date) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const deliveryDate = new Date(delivery.delivery_date + 'T00:00:00');
+    return deliveryDate < today && ['PENDING', 'SENT'].includes(delivery.status);
+  };
+
+  const getStatusColor = (statusOrDelivery) => {
+    // Accept either a delivery object or a plain status string
+    if (typeof statusOrDelivery === 'object' && statusOrDelivery !== null) {
+      if (isOverdue(statusOrDelivery)) return '#e74c3c';
+      return getStatusColor(statusOrDelivery.status);
+    }
+    switch (statusOrDelivery) {
       case 'PENDING': return '#f39c12';
       case 'SENT': return '#3498db';
       case 'RECEIVED': return '#4caf50';
@@ -55,8 +68,12 @@ function DeliveryCalendar() {
     }
   };
 
-  const getStatusBorderColor = (status) => {
-    switch (status) {
+  const getStatusBorderColor = (statusOrDelivery) => {
+    if (typeof statusOrDelivery === 'object' && statusOrDelivery !== null) {
+      if (isOverdue(statusOrDelivery)) return '3px solid #e74c3c';
+      return getStatusBorderColor(statusOrDelivery.status);
+    }
+    switch (statusOrDelivery) {
       case 'PENDING': return '3px solid #f39c12';
       case 'SENT': return '3px solid #3498db';
       case 'RECEIVED': return '3px solid #4caf50';
@@ -320,7 +337,7 @@ function DeliveryCalendar() {
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '12px', height: '12px', background: '#3498db', borderRadius: '2px' }}></span> Today</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '12px', height: '12px', background: '#f39c12', borderRadius: '2px' }}></span> Pending</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '12px', height: '12px', background: '#4caf50', borderRadius: '2px' }}></span> Complete</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '12px', height: '12px', background: '#e74c3c', borderRadius: '2px' }}></span> Problem</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '12px', height: '12px', background: '#e74c3c', borderRadius: '2px' }}></span> Overdue / Problem</span>
         </div>
         <button className="btn btn-success" onClick={() => openModal()}>
           <i className="fas fa-plus"></i> Add Delivery
@@ -367,14 +384,14 @@ function DeliveryCalendar() {
                           key={delivery.id}
                           className="delivery-dot"
                           style={{
-                            backgroundColor: getStatusColor(delivery.status),
-                            border: getStatusBorderColor(delivery.status),
+                            backgroundColor: getStatusColor(delivery),
+                            border: getStatusBorderColor(delivery),
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedDelivery(delivery);
                           }}
-                          title={`${delivery.supplier_name} - ${delivery.status}`}
+                          title={`${delivery.supplier_name} - ${isOverdue(delivery) ? 'OVERDUE' : delivery.status}`}
                         >
                           {delivery.supplier_name?.substring(0, 3)}
                         </div>
@@ -413,6 +430,11 @@ function DeliveryCalendar() {
             </div>
             <div className="info-row">
               <label>Status:</label>
+              {isOverdue(selectedDelivery) && (
+                <span style={{ color: '#e74c3c', fontWeight: 'bold', fontSize: '0.85rem', marginRight: '8px' }}>
+                  ⚠ OVERDUE
+                </span>
+              )}
               <select
                 value={selectedDelivery.status}
                 onChange={(e) => handleStatusChange(selectedDelivery.id, e.target.value)}
@@ -420,8 +442,8 @@ function DeliveryCalendar() {
                   padding: '5px 10px',
                   borderRadius: '4px',
                   border: '1px solid #ddd',
-                  background: getStatusColor(selectedDelivery.status) + '20',
-                  color: getStatusColor(selectedDelivery.status),
+                  background: getStatusColor(selectedDelivery) + '20',
+                  color: getStatusColor(selectedDelivery),
                   fontWeight: 'bold',
                 }}
               >
