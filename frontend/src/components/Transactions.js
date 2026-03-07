@@ -9,20 +9,33 @@ function Transactions() {
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Default to today's date in YYYY-MM-DD format
-    const getTodayString = () => {
-        const today = new Date();
-        const offset = today.getTimezoneOffset();
-        const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
-        return todayLocal.toISOString().split('T')[0];
+    // Helper to get a stable YYYY-MM-DD string explicitly in Philippines Time (Asia/Manila)
+    const getPHDateString = (dateObj) => {
+        try {
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Asia/Manila',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            const parts = formatter.formatToParts(dateObj);
+            const year = parts.find(p => p.type === 'year').value;
+            const month = parts.find(p => p.type === 'month').value;
+            const day = parts.find(p => p.type === 'day').value;
+            return `${year}-${month}-${day}`;
+        } catch (e) {
+            // Fallback if Intl parsing fails
+            return dateObj.toISOString().split('T')[0];
+        }
     };
-    const [selectedDate, setSelectedDate] = useState(getTodayString());
+
+    const [selectedDate, setSelectedDate] = useState(getPHDateString(new Date()));
 
     const [selectedTransaction, setSelectedTransaction] = useState(null);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 20;
+    const ITEMS_PER_PAGE = 10;
 
     // Sorting
     const [sortField, setSortField] = useState('timestamp');
@@ -92,7 +105,7 @@ function Transactions() {
             let matchesDate = true;
             if (selectedDate) {
                 const tDate = new Date(t.timestamp || t.created_at);
-                const tDateString = new Date(tDate.getTime() - (tDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                const tDateString = getPHDateString(tDate);
 
                 if (tDateString !== selectedDate) {
                     matchesDate = false;
@@ -334,7 +347,7 @@ function Transactions() {
                             className="btn btn-secondary"
                             onClick={() => {
                                 setSearchTerm('');
-                                setSelectedDate(getTodayString());
+                                setSelectedDate(getPHDateString(new Date()));
                             }}
                         >
                             <i className="fas fa-undo"></i>
