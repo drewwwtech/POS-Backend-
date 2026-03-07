@@ -1,36 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { salesAPI, productsAPI, deliveriesAPI } from '../services/api';
-import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-
-// Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [recentSales, setRecentSales] = useState([]);
   const [products, setProducts] = useState([]);
   const [upcomingDeliveries, setUpcomingDeliveries] = useState([]);
-  const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -45,12 +20,11 @@ function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [dashboardRes, salesRes, productsRes, deliveriesRes, chartRes] = await Promise.all([
+      const [dashboardRes, salesRes, productsRes, deliveriesRes] = await Promise.all([
         salesAPI.getDashboard().catch(() => ({ data: null })),
         salesAPI.getAll().catch(() => ({ data: [] })),
         productsAPI.getAll().catch(() => ({ data: [] })),
         deliveriesAPI.getAll().catch(() => ({ data: [] })),
-        salesAPI.getSalesChart().catch(() => ({ data: null })),
       ]);
 
       setDashboardData(dashboardRes.data);
@@ -58,24 +32,6 @@ function Dashboard() {
       setProducts(productsRes.data || []);
       setUpcomingDeliveries(deliveriesRes.data?.slice(0, 5) || []);
 
-      // Set chart data
-      if (chartRes.data) {
-        setChartData({
-          labels: chartRes.data.labels || [],
-          datasets: [
-            {
-              label: 'Daily Sales (PHP)',
-              data: chartRes.data.revenues || [],
-              borderColor: 'transparent',
-              backgroundColor: 'rgba(74, 144, 226, 0.6)',
-              fill: true,
-              tension: 0.4,
-              pointRadius: 3,
-              pointBackgroundColor: '#4a90e2',
-            },
-          ],
-        });
-      }
       setError(null);
     } catch (err) {
       setError('Failed to load dashboard data');
@@ -196,39 +152,6 @@ function Dashboard() {
           <p className="stat-value">{dashboardData?.pending_deliveries?.count || 0}</p>
         </div>
       </div>
-
-      {/* Sales Chart */}
-      {chartData && (
-        <div className="dashboard-section" style={{ marginTop: '20px' }}>
-          <h2>Sales Trend (Last 30 Days)</h2>
-          <div style={{ padding: '20px', background: '#252a30', borderRadius: '8px' }}>
-            <Line
-              data={chartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    labels: {
-                      color: '#f8f9fa'
-                    }
-                  }
-                },
-                scales: {
-                  x: {
-                    ticks: { color: '#adb5bd' },
-                    grid: { color: '#3a3f45' }
-                  },
-                  y: {
-                    ticks: { color: '#adb5bd' },
-                    grid: { color: '#3a3f45' }
-                  }
-                }
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Dashboard Grid */}
       <div className="dashboard-grid">
