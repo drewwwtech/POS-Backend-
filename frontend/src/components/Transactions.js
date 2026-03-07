@@ -8,8 +8,16 @@ function Transactions() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+
+    // Default to today's date in YYYY-MM-DD format
+    const getTodayString = () => {
+        const today = new Date();
+        const offset = today.getTimezoneOffset();
+        const todayLocal = new Date(today.getTime() - (offset * 60 * 1000));
+        return todayLocal.toISOString().split('T')[0];
+    };
+    const [selectedDate, setSelectedDate] = useState(getTodayString());
+
     const [selectedTransaction, setSelectedTransaction] = useState(null);
 
     // Pagination
@@ -82,26 +90,18 @@ function Transactions() {
             const matchesSearch = matchesTransactionId || matchesProduct;
 
             let matchesDate = true;
-            if (startDate || endDate) {
+            if (selectedDate) {
                 const tDate = new Date(t.timestamp || t.created_at);
-                tDate.setHours(0, 0, 0, 0);
+                const tDateString = new Date(tDate.getTime() - (tDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
-                if (startDate) {
-                    const sDate = new Date(startDate);
-                    sDate.setHours(0, 0, 0, 0);
-                    if (tDate < sDate) matchesDate = false;
-                }
-
-                if (endDate) {
-                    const eDate = new Date(endDate);
-                    eDate.setHours(23, 59, 59, 999);
-                    if (tDate > eDate) matchesDate = false;
+                if (tDateString !== selectedDate) {
+                    matchesDate = false;
                 }
             }
 
             return matchesSearch && matchesDate;
         });
-    }, [transactions, searchTerm, startDate, endDate]);
+    }, [transactions, searchTerm, selectedDate]);
 
     // Sort filtered transactions
     const sortedTransactions = useMemo(() => {
@@ -147,7 +147,7 @@ function Transactions() {
     // Reset to page 1 when filters/sort change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, startDate, endDate, sortField, sortDirection]);
+    }, [searchTerm, selectedDate, sortField, sortDirection]);
 
     // Summary stats
     const stats = useMemo(() => {
@@ -180,11 +180,9 @@ function Transactions() {
 
         doc.setFontSize(11);
         doc.setTextColor(100);
-        const dateRange = (startDate && endDate)
-            ? `Date Range: ${startDate} to ${endDate}`
-            : startDate ? `From: ${startDate}`
-                : endDate ? `Until: ${endDate}`
-                    : 'All Time';
+        const dateRange = selectedDate
+            ? `Date: ${selectedDate}`
+            : 'All Time';
         doc.text(dateRange, 14, 30);
 
         const tableColumn = ["Date", "Transaction ID", "Total Items", "Total Amount"];
@@ -320,33 +318,26 @@ function Transactions() {
                             />
                         </div>
 
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label>Start Date</label>
+                        <div className="filter-group date-filters" style={{ marginBottom: 0 }}>
+                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.85rem', color: '#adb5bd' }}>Select Date</label>
                             <input
                                 type="date"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
                                 className="form-control"
                                 style={{ padding: '8px 12px', border: '1px solid #3a3f45', borderRadius: '5px', background: '#2f343a', color: '#f8f9fa' }}
+                                title="Select Date"
                             />
                         </div>
 
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label>End Date</label>
-                            <input
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                className="form-control"
-                                style={{ padding: '8px 12px', border: '1px solid #3a3f45', borderRadius: '5px', background: '#2f343a', color: '#f8f9fa' }}
-                            />
-                        </div>
-
-                        <button className="btn btn-secondary" onClick={() => {
-                            setSearchTerm('');
-                            setStartDate('');
-                            setEndDate('');
-                        }}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => {
+                                setSearchTerm('');
+                                setSelectedDate(getTodayString());
+                            }}
+                        >
+                            <i className="fas fa-undo"></i>
                             Clear Filters
                         </button>
                     </div>
