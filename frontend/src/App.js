@@ -5,6 +5,7 @@ import Products from './components/Products';
 import Sales from './components/Sales';
 import DeliveryCalendar from './components/DeliveryCalendar';
 import Reports from './components/Reports';
+import Transactions from './components/Transactions';
 
 function Navigation() {
   const location = useLocation();
@@ -32,6 +33,10 @@ function Navigation() {
           <i className="fas fa-boxes"></i>
           <span>Products</span>
         </Link>
+        <Link to="/transactions" className={`nav-item ${isActive('/transactions')}`}>
+          <i className="fas fa-list"></i>
+          <span>Transactions</span>
+        </Link>
         <Link to="/deliveries" className={`nav-item ${isActive('/deliveries')}`}>
           <i className="fas fa-truck"></i>
           <span>Deliveries</span>
@@ -55,6 +60,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/products" element={<Products />} />
+            <Route path="/transactions" element={<Transactions />} />
             <Route path="/deliveries" element={<DeliveryCalendar />} />
             <Route path="/reports" element={<Reports />} />
           </Routes>
