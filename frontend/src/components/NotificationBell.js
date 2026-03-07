@@ -3,16 +3,20 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { notificationsAPI } from '../services/api';
 
 function NotificationBell() {
+    // Accumulated notifications — merges new ones with existing, never removes
     const [notifications, setNotifications] = useState([]);
-    const [count, setCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
     const [readIds, setReadIds] = useState(new Set());
+    const [showAll, setShowAll] = useState(false);
     const dropdownRef = useRef(null);
     const navigate = useNavigate();
     const location = useLocation();
     const readIdsRef = useRef(readIds);
+    const seenIdsRef = useRef(new Set());
 
-    // Keep ref in sync so the fetch callback always has latest readIds
+    const DISPLAY_LIMIT = 20;
+
+    // Keep ref in sync
     useEffect(() => {
         readIdsRef.current = readIds;
     }, [readIds]);
@@ -20,10 +24,41 @@ function NotificationBell() {
     const fetchNotifications = useCallback(async () => {
         try {
             const response = await notificationsAPI.getAll();
-            const data = response.data;
-            setNotifications(data.notifications || []);
-            const unread = (data.notifications || []).filter(n => !readIdsRef.current.has(n.id));
-            setCount(unread.length);
+            const incoming = response.data.notifications || [];
+
+            setNotifications(prev => {
+                // Build a map of existing notifications by ID
+                const existingMap = new Map(prev.map(n => [n.id, n]));
+
+                // Add new incoming notifications
+                incoming.forEach(n => {
+                    existingMap.set(n.id, n);
+                });
+
+                // Convert back to array, sorted by timestamp (newest first)
+                const merged = Array.from(existingMap.values());
+                merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                // Track which IDs are currently active (from backend)
+                const activeIds = new Set(incoming.map(n => n.id));
+
+                // Mark non-active notifications as resolved (auto-read)
+                // These are notifications whose conditions no longer exist
+                // (e.g., product was restocked and is no longer low)
+                const updatedReadIds = new Set(readIdsRef.current);
+                merged.forEach(n => {
+                    if (!activeIds.has(n.id) && !updatedReadIds.has(n.id)) {
+                        updatedReadIds.add(n.id);
+                    }
+                });
+                // Update readIds if we auto-resolved any
+                if (updatedReadIds.size !== readIdsRef.current.size) {
+                    setReadIds(updatedReadIds);
+                    readIdsRef.current = updatedReadIds;
+                }
+
+                return merged;
+            });
         } catch (err) {
             console.error('Failed to fetch notifications:', err);
         }
@@ -48,12 +83,6 @@ function NotificationBell() {
         return () => window.removeEventListener('notifications-refresh', handleRefreshEvent);
     }, [fetchNotifications]);
 
-    // Update count when readIds changes
-    useEffect(() => {
-        const unread = notifications.filter(n => !readIds.has(n.id));
-        setCount(unread.length);
-    }, [readIds, notifications]);
-
     // Close dropdown when clicking outside
     useEffect(() => {
         function handleClickOutside(event) {
@@ -66,9 +95,7 @@ function NotificationBell() {
     }, []);
 
     const handleNotificationClick = (notification) => {
-        // Mark as read
         setReadIds(prev => new Set([...prev, notification.id]));
-        // Navigate to relevant page
         if (notification.link) {
             navigate(notification.link);
         }
@@ -79,6 +106,12 @@ function NotificationBell() {
         e.stopPropagation();
         const allIds = notifications.map(n => n.id);
         setReadIds(new Set(allIds));
+    };
+
+    const handleClearRead = (e) => {
+        e.stopPropagation();
+        // Remove all read + resolved notifications, keep only unread ones
+        setNotifications(prev => prev.filter(n => !readIds.has(n.id)));
     };
 
     const getSeverityColor = (severity) => {
@@ -92,11 +125,31 @@ function NotificationBell() {
 
     const unreadCount = notifications.filter(n => !readIds.has(n.id)).length;
 
+    const formatTimestamp = (ts) => {
+        if (!ts) return '';
+        try {
+            const date = new Date(ts);
+            if (isNaN(date.getTime())) return '';
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+            });
+        } catch {
+            return '';
+        }
+    };
+
+    const displayedNotifications = showAll ? notifications : notifications.slice(0, DISPLAY_LIMIT);
+    const hasMore = notifications.length > DISPLAY_LIMIT;
+
     return (
         <div className="notification-bell-container" ref={dropdownRef}>
             <button
                 className="notification-bell-btn"
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={() => { setIsOpen(!isOpen); setShowAll(false); }}
                 title="Notifications"
             >
                 <i className="fas fa-bell"></i>
@@ -108,12 +161,19 @@ function NotificationBell() {
             {isOpen && (
                 <div className="notification-dropdown">
                     <div className="notification-dropdown-header">
-                        <h4>Notifications</h4>
-                        {unreadCount > 0 && (
-                            <button className="notification-mark-read" onClick={handleMarkAllRead}>
-                                Mark all as read
-                            </button>
-                        )}
+                        <h4>Notifications {notifications.length > 0 && <span className="notification-count">({notifications.length})</span>}</h4>
+                        <div className="notification-header-actions">
+                            {unreadCount > 0 && (
+                                <button className="notification-mark-read" onClick={handleMarkAllRead}>
+                                    Mark all read
+                                </button>
+                            )}
+                            {notifications.some(n => readIds.has(n.id)) && (
+                                <button className="notification-mark-read" onClick={handleClearRead}>
+                                    Clear read
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="notification-dropdown-body">
@@ -123,7 +183,7 @@ function NotificationBell() {
                                 <p>You're all caught up!</p>
                             </div>
                         ) : (
-                            notifications.map((notification) => (
+                            displayedNotifications.map((notification) => (
                                 <div
                                     key={notification.id}
                                     className={`notification-item ${readIds.has(notification.id) ? 'read' : 'unread'}`}
@@ -137,9 +197,14 @@ function NotificationBell() {
                                     </div>
                                     <div className="notification-item-content">
                                         <p className="notification-item-message">{notification.message}</p>
-                                        <span className="notification-item-type">
-                                            {notification.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                        </span>
+                                        <div className="notification-item-meta">
+                                            <span className="notification-item-type">
+                                                {notification.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                            </span>
+                                            <span className="notification-item-time">
+                                                <i className="fas fa-clock"></i> {formatTimestamp(notification.timestamp)}
+                                            </span>
+                                        </div>
                                     </div>
                                     <div
                                         className="notification-item-dot"
@@ -151,6 +216,17 @@ function NotificationBell() {
                             ))
                         )}
                     </div>
+
+                    {hasMore && (
+                        <div className="notification-dropdown-footer">
+                            <button
+                                className="notification-show-more"
+                                onClick={(e) => { e.stopPropagation(); setShowAll(!showAll); }}
+                            >
+                                {showAll ? 'Show less' : `Show all (${notifications.length})`}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
