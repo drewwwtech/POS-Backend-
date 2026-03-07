@@ -21,6 +21,10 @@ function Products() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   // Category modal state
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -41,6 +45,11 @@ function Products() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Reset pagination when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCategory]);
 
   // Auto-focus scanner on load
   useEffect(() => {
@@ -330,6 +339,31 @@ function Products() {
     return matchesSearch && matchesCategory;
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('...');
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
   const getCategoryName = (categoryId) => {
     const category = categories.find((c) => c.id === categoryId);
     return category ? category.name : 'Uncategorized';
@@ -524,7 +558,7 @@ function Products() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
+              {paginatedProducts.map((product) => (
                 <tr key={product.id}>
                   <td>{product.id}</td>
                   <td>
@@ -567,6 +601,60 @@ function Products() {
               ))}
             </tbody>
           </table>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="txn-pagination" style={{ margin: '15px 0 5px', padding: '14px 15px 4px' }}>
+            <span className="txn-pagination-info">
+              Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length}
+            </span>
+            <div className="txn-pagination-controls">
+              <button
+                className="txn-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(1)}
+                title="First page"
+              >
+                <i className="fas fa-angles-left"></i>
+              </button>
+              <button
+                className="txn-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => prev - 1)}
+              >
+                <i className="fas fa-chevron-left"></i>
+              </button>
+              {getPageNumbers().map((page, idx) => (
+                page === '...' ? (
+                  <span key={`ellipsis-${idx}`} className="txn-page-ellipsis">…</span>
+                ) : (
+                  <button
+                    key={page}
+                    className={`txn-page-btn ${currentPage === page ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </button>
+                )
+              ))}
+              <button
+                className="txn-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+              >
+                <i className="fas fa-chevron-right"></i>
+              </button>
+              <button
+                className="txn-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                title="Last page"
+              >
+                <i className="fas fa-angles-right"></i>
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

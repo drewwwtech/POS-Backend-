@@ -11,6 +11,15 @@ function Sales() {
   const [recentSales, setRecentSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
+
+  // Pagination - Products Grid
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
+
+  // Pagination - Recent Sales
+  const [salesCurrentPage, setSalesCurrentPage] = useState(1);
+  const SALES_PER_PAGE = 10;
+
   const barcodeInputRef = useRef(null);
   const lastBarcodeTime = useRef(Date.now());
 
@@ -25,6 +34,11 @@ function Sales() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Reset products pagination when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const fetchData = async () => {
     try {
@@ -280,8 +294,33 @@ function Sales() {
     product.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Pagination calculations - Products
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('...');
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
   // Get flattened recent sale items
-  const getRecentSaleItems = () => {
+  const getAllRecentSaleItems = () => {
     const items = [];
     recentSales.forEach((sale) => {
       if (sale.items && sale.items.length > 0) {
@@ -296,7 +335,33 @@ function Sales() {
         });
       }
     });
-    return items.slice(0, 10);
+    return items;
+  };
+
+  // Pagination calculations - Recent Sales
+  const allRecentItems = getAllRecentSaleItems();
+  const salesTotalPages = Math.ceil(allRecentItems.length / SALES_PER_PAGE);
+  const paginatedSales = allRecentItems.slice(
+    (salesCurrentPage - 1) * SALES_PER_PAGE,
+    salesCurrentPage * SALES_PER_PAGE
+  );
+
+  const getSalesPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+
+    if (salesTotalPages <= maxVisible) {
+      for (let i = 1; i <= salesTotalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (salesCurrentPage > 3) pages.push('...');
+      const start = Math.max(2, salesCurrentPage - 1);
+      const end = Math.min(salesTotalPages - 1, salesCurrentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (salesCurrentPage < salesTotalPages - 2) pages.push('...');
+      pages.push(salesTotalPages);
+    }
+    return pages;
   };
 
   const formatDate = (dateString) => {
@@ -379,7 +444,7 @@ function Sales() {
             />
           </div>
           <div className="products-grid">
-            {filteredProducts.map((product) => {
+            {paginatedProducts.map((product) => {
               const availableStock = getAvailableStock(product.id);
               return (
                 <div
@@ -407,6 +472,60 @@ function Sales() {
           </div>
           {filteredProducts.length === 0 && (
             <p className="empty-state">No products found</p>
+          )}
+
+          {/* Pagination - Products */}
+          {totalPages > 1 && (
+            <div className="txn-pagination" style={{ marginTop: '20px' }}>
+              <span className="txn-pagination-info">
+                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length}
+              </span>
+              <div className="txn-pagination-controls">
+                <button
+                  className="txn-page-btn"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(1)}
+                  title="First page"
+                >
+                  <i className="fas fa-angles-left"></i>
+                </button>
+                <button
+                  className="txn-page-btn"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => prev - 1)}
+                >
+                  <i className="fas fa-chevron-left"></i>
+                </button>
+                {getPageNumbers().map((page, idx) => (
+                  page === '...' ? (
+                    <span key={`ellipsis-${idx}`} className="txn-page-ellipsis">…</span>
+                  ) : (
+                    <button
+                      key={page}
+                      className={`txn-page-btn ${currentPage === page ? 'active' : ''}`}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  )
+                ))}
+                <button
+                  className="txn-page-btn"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                >
+                  <i className="fas fa-chevron-right"></i>
+                </button>
+                <button
+                  className="txn-page-btn"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  title="Last page"
+                >
+                  <i className="fas fa-angles-right"></i>
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
@@ -452,7 +571,7 @@ function Sales() {
       <div className="card" style={{ marginTop: '20px' }}>
         <h2>Recent Sales</h2>
         <div className="table-container">
-          {getRecentSaleItems().length === 0 ? (
+          {allRecentItems.length === 0 ? (
             <p className="empty-state">No sales yet</p>
           ) : (
             <table>
@@ -465,7 +584,7 @@ function Sales() {
                 </tr>
               </thead>
               <tbody>
-                {getRecentSaleItems().map((item, index) => (
+                {paginatedSales.map((item, index) => (
                   <tr key={`${item.saleId}-${index}`}>
                     <td>{formatDate(item.date)}</td>
                     <td>{item.productName}</td>
@@ -477,6 +596,60 @@ function Sales() {
             </table>
           )}
         </div>
+
+        {/* Pagination - Recent Sales */}
+        {salesTotalPages > 1 && (
+          <div className="txn-pagination">
+            <span className="txn-pagination-info">
+              Showing {((salesCurrentPage - 1) * SALES_PER_PAGE) + 1}–{Math.min(salesCurrentPage * SALES_PER_PAGE, allRecentItems.length)} of {allRecentItems.length}
+            </span>
+            <div className="txn-pagination-controls">
+              <button
+                className="txn-page-btn"
+                disabled={salesCurrentPage === 1}
+                onClick={() => setSalesCurrentPage(1)}
+                title="First page"
+              >
+                <i className="fas fa-angles-left"></i>
+              </button>
+              <button
+                className="txn-page-btn"
+                disabled={salesCurrentPage === 1}
+                onClick={() => setSalesCurrentPage(prev => prev - 1)}
+              >
+                <i className="fas fa-chevron-left"></i>
+              </button>
+              {getSalesPageNumbers().map((page, idx) => (
+                page === '...' ? (
+                  <span key={`sales-ellipsis-${idx}`} className="txn-page-ellipsis">…</span>
+                ) : (
+                  <button
+                    key={`sales-page-${page}`}
+                    className={`txn-page-btn ${salesCurrentPage === page ? 'active' : ''}`}
+                    onClick={() => setSalesCurrentPage(page)}
+                  >
+                    {page}
+                  </button>
+                )
+              ))}
+              <button
+                className="txn-page-btn"
+                disabled={salesCurrentPage === salesTotalPages}
+                onClick={() => setSalesCurrentPage(prev => prev + 1)}
+              >
+                <i className="fas fa-chevron-right"></i>
+              </button>
+              <button
+                className="txn-page-btn"
+                disabled={salesCurrentPage === salesTotalPages}
+                onClick={() => setSalesCurrentPage(salesTotalPages)}
+                title="Last page"
+              >
+                <i className="fas fa-angles-right"></i>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

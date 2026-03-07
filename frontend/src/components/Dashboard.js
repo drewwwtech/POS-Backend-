@@ -34,6 +34,10 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Pagination - Recent Sales
+  const [salesCurrentPage, setSalesCurrentPage] = useState(1);
+  const SALES_PER_PAGE = 10;
+
   useEffect(() => {
     fetchDashboardData();
   }, []);
@@ -50,10 +54,10 @@ function Dashboard() {
       ]);
 
       setDashboardData(dashboardRes.data);
-      setRecentSales(salesRes.data?.slice(0, 10) || []);
+      setRecentSales(salesRes.data || []);
       setProducts(productsRes.data || []);
       setUpcomingDeliveries(deliveriesRes.data?.slice(0, 5) || []);
-      
+
       // Set chart data
       if (chartRes.data) {
         setChartData({
@@ -104,8 +108,8 @@ function Dashboard() {
     }
   };
 
-  // Flatten recent sales to show each item per row
-  const getRecentSaleItems = () => {
+  // Get flattened recent sale items
+  const getAllRecentSaleItems = () => {
     const items = [];
     recentSales.forEach((sale) => {
       if (sale.items && sale.items.length > 0) {
@@ -121,7 +125,33 @@ function Dashboard() {
         });
       }
     });
-    return items.slice(0, 10);
+    return items;
+  };
+
+  // Pagination calculations - Recent Sales
+  const allRecentItems = getAllRecentSaleItems();
+  const salesTotalPages = Math.ceil(allRecentItems.length / SALES_PER_PAGE);
+  const paginatedSales = allRecentItems.slice(
+    (salesCurrentPage - 1) * SALES_PER_PAGE,
+    salesCurrentPage * SALES_PER_PAGE
+  );
+
+  const getSalesPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+
+    if (salesTotalPages <= maxVisible) {
+      for (let i = 1; i <= salesTotalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (salesCurrentPage > 3) pages.push('...');
+      const start = Math.max(2, salesCurrentPage - 1);
+      const end = Math.min(salesTotalPages - 1, salesCurrentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (salesCurrentPage < salesTotalPages - 2) pages.push('...');
+      pages.push(salesTotalPages);
+    }
+    return pages;
   };
 
   if (loading) {
@@ -142,27 +172,27 @@ function Dashboard() {
       {/* Stats Cards - 6 cards */}
       <div className="stats-grid">
         <div className="stat-card">
-          <h3><i className="fas fa-peso-sign" style={{color: '#ffffff'}}></i> Today's Sales</h3>
+          <h3><i className="fas fa-peso-sign" style={{ color: '#ffffff' }}></i> Today's Sales</h3>
           <p className="stat-value">{formatCurrency(dashboardData?.business_health?.total_revenue || 0)}</p>
         </div>
         <div className="stat-card">
-          <h3><i className="fas fa-receipt" style={{color: '#3b82f6'}}></i> Transactions</h3>
+          <h3><i className="fas fa-receipt" style={{ color: '#3b82f6' }}></i> Transactions</h3>
           <p className="stat-value">{dashboardData?.business_health?.total_transactions || 0}</p>
         </div>
         <div className="stat-card">
-          <h3><i className="fas fa-calendar-alt" style={{color: '#9b59b6'}}></i> Monthly Sales</h3>
+          <h3><i className="fas fa-calendar-alt" style={{ color: '#9b59b6' }}></i> Monthly Sales</h3>
           <p className="stat-value">{formatCurrency(dashboardData?.month_sales?.total_revenue || 0)}</p>
         </div>
         <div className="stat-card">
-          <h3><i className="fas fa-chart-line" style={{color: '#2ecc71'}}></i> Yearly Sales</h3>
+          <h3><i className="fas fa-chart-line" style={{ color: '#2ecc71' }}></i> Yearly Sales</h3>
           <p className="stat-value">{formatCurrency(dashboardData?.year_sales?.total_revenue || 0)}</p>
         </div>
         <div className="stat-card">
-          <h3><i className="fas fa-exclamation-triangle" style={{color: '#e74c3c'}}></i> Low Stock</h3>
+          <h3><i className="fas fa-exclamation-triangle" style={{ color: '#e74c3c' }}></i> Low Stock</h3>
           <p className="stat-value">{dashboardData?.inventory_alerts?.low_stock_count || 0}</p>
         </div>
         <div className="stat-card">
-          <h3><i className="fas fa-clock" style={{color: '#f39c12'}}></i> Pending Deliveries</h3>
+          <h3><i className="fas fa-clock" style={{ color: '#f39c12' }}></i> Pending Deliveries</h3>
           <p className="stat-value">{dashboardData?.pending_deliveries?.count || 0}</p>
         </div>
       </div>
@@ -205,7 +235,7 @@ function Dashboard() {
         <div className="dashboard-section">
           <h2>Recent Sales</h2>
           <div className="table-container">
-            {getRecentSaleItems().length === 0 ? (
+            {allRecentItems.length === 0 ? (
               <p className="empty-state">No recent sales</p>
             ) : (
               <table id="recent-sales-table">
@@ -218,7 +248,7 @@ function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {getRecentSaleItems().map((item, index) => (
+                  {paginatedSales.map((item, index) => (
                     <tr key={`${item.saleId}-${index}`}>
                       <td>{formatDate(item.date)}</td>
                       <td>{item.productName}</td>
@@ -230,6 +260,60 @@ function Dashboard() {
               </table>
             )}
           </div>
+
+          {/* Pagination - Recent Sales */}
+          {salesTotalPages > 1 && (
+            <div className="txn-pagination">
+              <span className="txn-pagination-info">
+                Showing {((salesCurrentPage - 1) * SALES_PER_PAGE) + 1}–{Math.min(salesCurrentPage * SALES_PER_PAGE, allRecentItems.length)} of {allRecentItems.length}
+              </span>
+              <div className="txn-pagination-controls">
+                <button
+                  className="txn-page-btn"
+                  disabled={salesCurrentPage === 1}
+                  onClick={() => setSalesCurrentPage(1)}
+                  title="First page"
+                >
+                  <i className="fas fa-angles-left"></i>
+                </button>
+                <button
+                  className="txn-page-btn"
+                  disabled={salesCurrentPage === 1}
+                  onClick={() => setSalesCurrentPage(prev => prev - 1)}
+                >
+                  <i className="fas fa-chevron-left"></i>
+                </button>
+                {getSalesPageNumbers().map((page, idx) => (
+                  page === '...' ? (
+                    <span key={`sales-ellipsis-${idx}`} className="txn-page-ellipsis">…</span>
+                  ) : (
+                    <button
+                      key={`sales-page-${page}`}
+                      className={`txn-page-btn ${salesCurrentPage === page ? 'active' : ''}`}
+                      onClick={() => setSalesCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  )
+                ))}
+                <button
+                  className="txn-page-btn"
+                  disabled={salesCurrentPage === salesTotalPages}
+                  onClick={() => setSalesCurrentPage(prev => prev + 1)}
+                >
+                  <i className="fas fa-chevron-right"></i>
+                </button>
+                <button
+                  className="txn-page-btn"
+                  disabled={salesCurrentPage === salesTotalPages}
+                  onClick={() => setSalesCurrentPage(salesTotalPages)}
+                  title="Last page"
+                >
+                  <i className="fas fa-angles-right"></i>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="dashboard-section">
@@ -251,7 +335,7 @@ function Dashboard() {
                     <tr key={product.id}>
                       <td>{product.name}</td>
                       <td>{formatCurrency(product.price)}</td>
-                      <td style={{ 
+                      <td style={{
                         fontWeight: 'bold',
                         color: product.stock_quantity < 10 ? '#e74c3c' : '#4caf50'
                       }}>{product.stock_quantity}</td>
