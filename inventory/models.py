@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models.signals import pre_save
+from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
 class Category(models.Model):
@@ -66,27 +66,47 @@ class StockLog(models.Model):
 # --- THE AUTO-LOGGER SIGNAL ---
 
 @receiver(pre_save, sender=Product)
-def track_stock_changes(sender, instance, **kwargs):
-    if instance.pk and not getattr(instance, '_skip_stock_log', False):
+def capture_old_stock(sender, instance, **kwargs):
+    """Capture the old stock quantity before saving."""
+    if instance.pk:
         try:
             old_product = Product.objects.get(pk=instance.pk)
-            
-            if old_product.stock_quantity != instance.stock_quantity:
-                diff = instance.stock_quantity - old_product.stock_quantity
-                
-                if diff > 0:
-                    log_type = 'RESTOCK'
-                    note_detail = "Stock increased (Restock/In)"
-                else:
-                    log_type = 'SALE'
-                    note_detail = "Stock decreased (Sale/Out)"
-
-                StockLog.objects.create(
-                    product=instance,
-                    change_amount=diff,
-                    current_stock=instance.stock_quantity,
-                    type=log_type,
-                    notes=f"System: {note_detail}"
-                )
+            instance._old_stock_quantity = old_product.stock_quantity
         except Product.DoesNotExist:
-            pass
+            instance._old_stock_quantity = 0
+    else:
+        instance._old_stock_quantity = 0
+
+@receiver(post_save, sender=Product)
+def track_stock_changes(sender, instance, created, **kwargs):
+    """Log the stock changes after saving."""
+    if not getattr(instance, '_skip_stock_log', False):
+        old_stock = getattr(instance, '_old_stock_quantity', 0)
+        
+        # If it's a new product and stock > 0, log it as a restock
+        if created and instance.stock_quantity > 0:
+            StockLog.objects.create(
+                product=instance,
+                change_amount=instance.stock_quantity,
+                current_stock=instance.stock_quantity,
+                type='RESTOCK',
+                notes="System: Initial stock addition"
+            )
+        # If it's an existing product and stock has changed
+        elif not created and old_stock != instance.stock_quantity:
+            diff = instance.stock_quantity - old_stock
+            
+            if diff > 0:
+                log_type = 'RESTOCK'
+                note_detail = "Stock increased (Restock/In)"
+            else:
+                log_type = 'SALE'
+                note_detail = "Stock decreased (Sale/Out)"
+
+            StockLog.objects.create(
+                product=instance,
+                change_amount=diff,
+                current_stock=instance.stock_quantity,
+                type=log_type,
+                notes=f"System: {note_detail}"
+            )

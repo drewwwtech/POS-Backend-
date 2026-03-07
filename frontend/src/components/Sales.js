@@ -49,13 +49,13 @@ function Sales() {
     const cartItem = cart.find((item) => item.product === product.id);
     const currentQtyInCart = cartItem ? cartItem.quantity : 0;
     const availableStock = product.stock_quantity - currentQtyInCart;
-    
+
     // Check if product is in stock
     if (availableStock <= 0) {
       setError(`${product.name} is out of stock or already in cart`);
       return;
     }
-    
+
     const existingItem = cart.find((item) => item.product === product.id);
     if (existingItem) {
       // Check if we can add more
@@ -96,7 +96,7 @@ function Sales() {
       removeFromCart(productId);
       return;
     }
-    
+
     const qty = Math.floor(quantity); // Ensure integer
     if (qty <= 0) {
       removeFromCart(productId);
@@ -135,21 +135,21 @@ function Sales() {
     // Check if Enter key was pressed (most scanners send Enter after barcode)
     if (e.key === 'Enter' && barcodeInput.trim()) {
       const scannedSku = barcodeInput.trim();
-      
+
       console.log('Scanning SKU:', scannedSku);
-      
+
       // Search for product by SKU (case-insensitive)
-      const product = products.find(p => 
-        p.sku === scannedSku || 
+      const product = products.find(p =>
+        p.sku === scannedSku ||
         p.sku?.toLowerCase() === scannedSku.toLowerCase()
       );
-      
+
       if (product) {
         addToCart(product);
         setError(null);
       } else {
         // Try searching by name as fallback
-        const productByName = products.find(p => 
+        const productByName = products.find(p =>
           p.name?.toLowerCase().includes(scannedSku.toLowerCase())
         );
         if (productByName) {
@@ -159,7 +159,7 @@ function Sales() {
           setError(`Product not found: ${scannedSku}`);
         }
       }
-      
+
       // Clear the barcode input
       setBarcodeInput('');
     }
@@ -175,7 +175,7 @@ function Sales() {
   // Auto-detect barcode when input stops changing (for scanners without Enter key)
   useEffect(() => {
     if (!barcodeInput || barcodeInput.length < 3) return;
-    
+
     const timer = setTimeout(() => {
       // Check if it's been at least 100ms since last keystroke (scanner is fast)
       const now = Date.now();
@@ -183,18 +183,18 @@ function Sales() {
         // Treat as scanner input - auto search
         const scannedSku = barcodeInput.trim();
         console.log('Auto-detecting SKU:', scannedSku);
-        
-        const product = products.find(p => 
-          p.sku === scannedSku || 
+
+        const product = products.find(p =>
+          p.sku === scannedSku ||
           p.sku?.toLowerCase() === scannedSku.toLowerCase()
         );
-        
+
         if (product) {
           addToCart(product);
           setError(null);
         } else {
           // Try searching by name as fallback
-          const productByName = products.find(p => 
+          const productByName = products.find(p =>
             p.name?.toLowerCase().includes(scannedSku.toLowerCase())
           );
           if (productByName) {
@@ -202,13 +202,13 @@ function Sales() {
             setError(null);
           }
         }
-        
+
         setBarcodeInput('');
       }
     }, 150);
-    
+
     lastBarcodeTime.current = Date.now();
-    
+
     return () => clearTimeout(timer);
   }, [barcodeInput, products]);
 
@@ -225,7 +225,7 @@ function Sales() {
         setError(`Invalid quantity for ${item.name}`);
         return;
       }
-      
+
       // Check if quantity exceeds available stock
       const product = products.find(p => p.id === item.product);
       if (!product) {
@@ -236,7 +236,7 @@ function Sales() {
         setError(`Insufficient stock for ${item.name}. Available: ${product.stock_quantity}, Requested: ${item.quantity}`);
         return;
       }
-      
+
       // Check for invalid prices
       if (item.price === null || item.price === undefined || item.price < 0 || isNaN(item.price)) {
         setError(`Invalid price for ${item.name}`);
@@ -259,6 +259,7 @@ function Sales() {
       clearCart();
       fetchData();
       setSuccess('Sale completed successfully!');
+      window.dispatchEvent(new Event('notifications-refresh'));
     } catch (err) {
       setError('Failed to process sale: ' + (err.response?.data?.detail || err.message));
       console.error(err);
@@ -328,11 +329,11 @@ function Sales() {
       {error && <div className="error" style={{ background: '#fee', color: '#c00', padding: '10px', borderRadius: '4px', marginBottom: '10px' }}>{error}</div>}
 
       {success && (
-        <div style={{ 
-          background: '#d4edda', 
-          color: '#155724', 
-          padding: '12px 20px', 
-          borderRadius: '4px', 
+        <div style={{
+          background: '#d4edda',
+          color: '#155724',
+          padding: '12px 20px',
+          borderRadius: '4px',
           marginBottom: '10px',
           display: 'flex',
           alignItems: 'center',
@@ -388,13 +389,13 @@ function Sales() {
                 >
                   <h4>{product.name}</h4>
                   <p className="price">{formatCurrency(product.price)}</p>
-                  <p className="stock-info" style={{ 
+                  <p className="stock-info" style={{
                     color: availableStock <= 0 ? '#e74c3c' : availableStock <= 3 ? '#f39c12' : 'var(--secondary-text)'
                   }}>
                     {availableStock <= 0 ? 'Out of Stock' : `Stock: ${availableStock}`}
                   </p>
-                  <button 
-                    className="add-to-cart" 
+                  <button
+                    className="add-to-cart"
                     disabled={availableStock <= 0}
                     style={{ background: availableStock <= 0 ? '#6c757d' : '#48bb78' }}
                   >

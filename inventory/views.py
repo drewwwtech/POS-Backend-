@@ -22,23 +22,24 @@ class ProductDetailAPI(generics.RetrieveUpdateDestroyAPIView):
         try:
             instance = self.get_object()
             
-            # Check if product has any related sales or deliveries
-            if hasattr(instance, 'items') and instance.items.exists():
+            # Check if product has any related sales (the related name is saleitem_set, not items)
+            if hasattr(instance, 'saleitem_set') and instance.saleitem_set.exists():
                 return Response(
-                    {"error": "Cannot delete product: It has been used in sales transactions"},
+                    {"error": "Cannot delete product: It has been used in sales transactions. Consider deactivating it instead."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            if hasattr(instance, 'delivery_items') and instance.delivery_items.exists():
-                return Response(
-                    {"error": "Cannot delete product: It has been used in deliveries"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Check for stock logs (this is the missing check)
+            # Check for stock logs (this prevents deleting items that had previous stock)
             if hasattr(instance, 'stock_logs') and instance.stock_logs.exists():
                 return Response(
                     {"error": "Cannot delete product: It has stock movement history. Consider deactivating it instead."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if the product currently has stock
+            if instance.stock_quantity > 0:
+                return Response(
+                    {"error": f"Cannot delete product: It currently has {instance.stock_quantity} in stock. Please adjust stock to 0 or deactivate it instead."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             

@@ -153,6 +153,7 @@ function DeliveryCalendar() {
       }
       closeModal();
       fetchData();
+      window.dispatchEvent(new Event('notifications-refresh'));
     } catch (err) {
       console.error('Error saving delivery:', err);
       setError('Failed to save delivery: ' + (err.response?.data?.detail || err.message || err.toString()));
@@ -162,30 +163,31 @@ function DeliveryCalendar() {
   const handleStatusChange = async (deliveryId, newStatus) => {
     try {
       console.log('Updating status for delivery:', deliveryId, 'to:', newStatus);
-      
+
       // First update the status
       const updateResponse = await deliveriesAPI.update(deliveryId, { status: newStatus });
       console.log('Status update response:', updateResponse);
-      
+
       // Then fetch the updated delivery data
       const response = await deliveriesAPI.getById(deliveryId);
       console.log('Get delivery response:', response);
-      
+
       // Handle both direct data and paginated response formats
       const deliveryData = response.data.results ? response.data.results[0] : response.data;
       console.log('Delivery data to set:', deliveryData);
-      
+
       if (deliveryData) {
         setSelectedDelivery(deliveryData);
         console.log('Selected delivery updated successfully');
       } else {
         console.error('No delivery data received');
       }
-      
+
       // Refresh the full list
       fetchData();
+      window.dispatchEvent(new Event('notifications-refresh'));
       console.log('Full delivery list refreshed');
-      
+
     } catch (err) {
       console.error('Error updating status:', err);
       console.error('Error details:', err.response?.data);

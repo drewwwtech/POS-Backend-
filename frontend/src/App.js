@@ -6,6 +6,7 @@ import Sales from './components/Sales';
 import DeliveryCalendar from './components/DeliveryCalendar';
 import Reports from './components/Reports';
 import Transactions from './components/Transactions';
+import NotificationBell from './components/NotificationBell';
 
 function Navigation() {
   const location = useLocation();
@@ -56,6 +57,9 @@ function App() {
       <div className="app-container">
         <Navigation />
         <main className="main-content">
+          <div className="top-bar">
+            <NotificationBell />
+          </div>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/sales" element={<Sales />} />
@@ -71,3 +75,4 @@ function App() {
 }
 
 export default App;
+

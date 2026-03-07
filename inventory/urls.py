@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import ProductListAPI, ProductDetailAPI, RestockAPIView, StockHistoryListAPI, CategoryListAPI, CategoryDetailAPI, ProductLookupAPI
+from .notifications import NotificationsAPI
 
 urlpatterns = [
     path('products/', ProductListAPI.as_view(), name='product-list'),
@@ -9,4 +10,5 @@ urlpatterns = [
     path('categories/<int:pk>/', CategoryDetailAPI.as_view(), name='category-detail'),
     path('restock/', RestockAPIView.as_view(), name='restock-stock-in'),
     path('history/', StockHistoryListAPI.as_view(), name='stock-history'),
+    path('notifications/', NotificationsAPI.as_view(), name='notifications'),
 ]

@@ -20,7 +20,7 @@ function Products() {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
-  
+
   // Category modal state
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -125,6 +125,7 @@ function Products() {
       setRestockNotes('');
       setError(null);
       fetchData();
+      window.dispatchEvent(new Event('notifications-refresh'));
       // Re-focus scanner for next scan
       if (scannerRef.current) scannerRef.current.focus();
     } catch (err) {
@@ -202,12 +203,12 @@ function Products() {
 
   const handleCategorySubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!categoryFormData.name.trim()) {
       setError('Category name is required');
       return;
     }
-    
+
     try {
       const data = {
         name: categoryFormData.name.trim(),
@@ -245,21 +246,21 @@ function Products() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate prices are positive
     const price = parseFloat(formData.price);
     const basePrice = parseFloat(formData.base_price);
-    
+
     if (isNaN(price) || price < 0) {
       setError('Selling price must be a positive number');
       return;
     }
-    
+
     if (isNaN(basePrice) || basePrice < 0) {
       setError('Base price (cost) must be a positive number');
       return;
     }
-    
+
     try {
       const data = {
         name: formData.name,
@@ -282,6 +283,7 @@ function Products() {
 
       closeModal();
       fetchData();
+      window.dispatchEvent(new Event('notifications-refresh'));
     } catch (err) {
       setError('Failed to save product: ' + (err.response?.data?.detail || JSON.stringify(err.response?.data) || err.message));
       console.error(err);
@@ -298,12 +300,12 @@ function Products() {
       showToast('✅ Product deleted successfully');
     } catch (err) {
       // Try to get the specific error message from the server
-      const errorMessage = err.response?.data?.error || 
-                          err.response?.data?.detail || 
-                          'Failed to delete product';
+      const errorMessage = err.response?.data?.error ||
+        err.response?.data?.detail ||
+        'Failed to delete product';
       setError(errorMessage);
       console.error('Delete error:', err);
-      
+
       // Show a more user-friendly message
       if (errorMessage.includes('sales transactions')) {
         setError('Cannot delete product: It has been used in sales transactions. Consider deactivating it instead.');

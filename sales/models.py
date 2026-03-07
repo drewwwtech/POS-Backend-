@@ -63,9 +63,7 @@ def process_sale_item(sender, instance, created, **kwargs):
             product.stock_quantity -= instance.quantity
             
             # This triggers the track_stock_changes signal in inventory/models.py
-            product._skip_stock_log = True
-            product.save()
-            product._skip_stock_log = False 
+            product.save() 
 
             # 2. Update the Parent Sale Total
             sale = instance.sale

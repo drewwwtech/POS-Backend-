@@ -76,4 +76,9 @@ export const deliveriesAPI = {
   getPreview: (id) => api.get(`/deliveries/${id}/preview/`),
 };
 
+// Notifications API
+export const notificationsAPI = {
+  getAll: () => api.get('/inventory/notifications/'),
+};
+
 export default api;
