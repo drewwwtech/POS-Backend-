@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { salesAPI } from '../services/api';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { API_BASE_URL } from '../services/api'; // Or we can construct receipt URL
 
 function Transactions() {
     const [transactions, setTransactions] = useState([]);
@@ -12,6 +11,14 @@ function Transactions() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [selectedTransaction, setSelectedTransaction] = useState(null);
+
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 20;
+
+    // Sorting
+    const [sortField, setSortField] = useState('timestamp');
+    const [sortDirection, setSortDirection] = useState('desc'); // newest first by default
 
     useEffect(() => {
         fetchTransactions();
@@ -55,44 +62,122 @@ function Transactions() {
         }
     };
 
-    // Filter transactions
-    const filteredTransactions = transactions.filter((t) => {
-        const matchesSearch = t.transaction_id?.toLowerCase().includes(searchTerm.toLowerCase());
-
-        let matchesDate = true;
-        if (startDate || endDate) {
-            const tDate = new Date(t.timestamp || t.created_at);
-            tDate.setHours(0, 0, 0, 0); // Normalize time
-
-            if (startDate) {
-                const sDate = new Date(startDate);
-                sDate.setHours(0, 0, 0, 0);
-                if (tDate < sDate) matchesDate = false;
-            }
-
-            if (endDate) {
-                const eDate = new Date(endDate);
-                eDate.setHours(23, 59, 59, 999);
-                if (tDate > eDate) matchesDate = false;
-            }
-        }
-
-        return matchesSearch && matchesDate;
-    });
-
     const getTotalItems = (items) => {
         if (!items || !Array.isArray(items)) return 0;
         return items.reduce((sum, item) => sum + (item.quantity || 0), 0);
     };
 
+    // Get all product names from a transaction's items
+    const getProductNames = (items) => {
+        if (!items || !Array.isArray(items)) return '';
+        return items.map(item => item.product_name || `Product #${item.product}`).join(', ').toLowerCase();
+    };
+
+    // Filter transactions — now searches Transaction ID AND product names
+    const filteredTransactions = useMemo(() => {
+        return transactions.filter((t) => {
+            const term = searchTerm.toLowerCase();
+            const matchesTransactionId = t.transaction_id?.toLowerCase().includes(term);
+            const matchesProduct = term ? getProductNames(t.items).includes(term) : true;
+            const matchesSearch = matchesTransactionId || matchesProduct;
+
+            let matchesDate = true;
+            if (startDate || endDate) {
+                const tDate = new Date(t.timestamp || t.created_at);
+                tDate.setHours(0, 0, 0, 0);
+
+                if (startDate) {
+                    const sDate = new Date(startDate);
+                    sDate.setHours(0, 0, 0, 0);
+                    if (tDate < sDate) matchesDate = false;
+                }
+
+                if (endDate) {
+                    const eDate = new Date(endDate);
+                    eDate.setHours(23, 59, 59, 999);
+                    if (tDate > eDate) matchesDate = false;
+                }
+            }
+
+            return matchesSearch && matchesDate;
+        });
+    }, [transactions, searchTerm, startDate, endDate]);
+
+    // Sort filtered transactions
+    const sortedTransactions = useMemo(() => {
+        const sorted = [...filteredTransactions];
+        sorted.sort((a, b) => {
+            let valA, valB;
+
+            switch (sortField) {
+                case 'timestamp':
+                    valA = new Date(a.timestamp || a.created_at).getTime();
+                    valB = new Date(b.timestamp || b.created_at).getTime();
+                    break;
+                case 'transaction_id':
+                    valA = (a.transaction_id || '').toLowerCase();
+                    valB = (b.transaction_id || '').toLowerCase();
+                    break;
+                case 'items':
+                    valA = getTotalItems(a.items);
+                    valB = getTotalItems(b.items);
+                    break;
+                case 'total_amount':
+                    valA = parseFloat(a.total_amount || 0);
+                    valB = parseFloat(b.total_amount || 0);
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return sorted;
+    }, [filteredTransactions, sortField, sortDirection]);
+
+    // Pagination logic
+    const totalPages = Math.ceil(sortedTransactions.length / ITEMS_PER_PAGE);
+    const paginatedTransactions = sortedTransactions.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
+
+    // Reset to page 1 when filters/sort change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, startDate, endDate, sortField, sortDirection]);
+
+    // Summary stats
+    const stats = useMemo(() => {
+        const total = filteredTransactions.reduce((sum, t) => sum + parseFloat(t.total_amount || 0), 0);
+        const count = filteredTransactions.length;
+        const totalItems = filteredTransactions.reduce((sum, t) => sum + getTotalItems(t.items), 0);
+        return { total, count, totalItems };
+    }, [filteredTransactions]);
+
+    // Handle column sort
+    const handleSort = (field) => {
+        if (sortField === field) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortDirection(field === 'timestamp' ? 'desc' : 'asc');
+        }
+    };
+
+    const getSortIcon = (field) => {
+        if (sortField !== field) return 'fas fa-sort';
+        return sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+    };
+
     const handleDownloadPDF = () => {
         const doc = new jsPDF();
 
-        // Title
         doc.setFontSize(18);
         doc.text('Transactions History (Stock Out)', 14, 22);
 
-        // Subtitle
         doc.setFontSize(11);
         doc.setTextColor(100);
         const dateRange = (startDate && endDate)
@@ -102,13 +187,13 @@ function Transactions() {
                     : 'All Time';
         doc.text(dateRange, 14, 30);
 
-        // Generate Table
         const tableColumn = ["Date", "Transaction ID", "Total Items", "Total Amount"];
         const tableRows = [];
 
         let grandTotal = 0;
 
-        filteredTransactions.forEach(t => {
+        // Use sortedTransactions (all filtered, not just current page)
+        sortedTransactions.forEach(t => {
             const transactionData = [
                 formatDate(t.timestamp || t.created_at),
                 t.transaction_id,
@@ -119,7 +204,6 @@ function Transactions() {
             grandTotal += parseFloat(t.total_amount || 0);
         });
 
-        // Add total row
         tableRows.push(['', '', 'GRAND TOTAL:', formatCurrency(grandTotal)]);
 
         doc.autoTable({
@@ -132,7 +216,7 @@ function Transactions() {
                 if (data.row.index === tableRows.length - 1) {
                     data.cell.styles.fontStyle = 'bold';
                     if (data.column.index === 3) {
-                        data.cell.styles.textColor = [72, 187, 120]; // Green color matching success btn
+                        data.cell.styles.textColor = [72, 187, 120];
                     }
                 }
             }
@@ -159,6 +243,27 @@ function Transactions() {
         setSelectedTransaction(null);
     };
 
+    // Generate page numbers with ellipsis
+    const getPageNumbers = () => {
+        const pages = [];
+        const maxVisible = 5;
+
+        if (totalPages <= maxVisible) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
+        } else {
+            pages.push(1);
+            if (currentPage > 3) pages.push('...');
+
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            for (let i = start; i <= end; i++) pages.push(i);
+
+            if (currentPage < totalPages - 2) pages.push('...');
+            pages.push(totalPages);
+        }
+        return pages;
+    };
+
     if (loading) {
         return <div className="loading">Loading transactions...</div>;
     }
@@ -170,6 +275,37 @@ function Transactions() {
                 <p>View sales history and stock out records</p>
             </header>
 
+            {/* Summary Stats */}
+            <div className="txn-stats-grid">
+                <div className="txn-stat-card">
+                    <div className="txn-stat-icon" style={{ background: 'rgba(74, 144, 226, 0.15)', color: '#4a90e2' }}>
+                        <i className="fas fa-receipt"></i>
+                    </div>
+                    <div className="txn-stat-info">
+                        <span className="txn-stat-value">{stats.count}</span>
+                        <span className="txn-stat-label">Transactions</span>
+                    </div>
+                </div>
+                <div className="txn-stat-card">
+                    <div className="txn-stat-icon" style={{ background: 'rgba(72, 187, 120, 0.15)', color: '#48bb78' }}>
+                        <i className="fas fa-peso-sign"></i>
+                    </div>
+                    <div className="txn-stat-info">
+                        <span className="txn-stat-value txn-stat-value-revenue">{formatCurrency(stats.total)}</span>
+                        <span className="txn-stat-label">Total Revenue</span>
+                    </div>
+                </div>
+                <div className="txn-stat-card">
+                    <div className="txn-stat-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
+                        <i className="fas fa-boxes-stacked"></i>
+                    </div>
+                    <div className="txn-stat-info">
+                        <span className="txn-stat-value">{stats.totalItems}</span>
+                        <span className="txn-stat-label">Items Sold</span>
+                    </div>
+                </div>
+            </div>
+
             <div className="card">
                 <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '20px' }}>
                     <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -178,7 +314,7 @@ function Transactions() {
                             <input
                                 type="text"
                                 className="search-input"
-                                placeholder="Search Transaction ID..."
+                                placeholder="Search by ID or product name..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
@@ -220,46 +356,110 @@ function Transactions() {
                         onClick={handleDownloadPDF}
                         disabled={filteredTransactions.length === 0}
                     >
-                        <i className="fas fa-download"></i> Download Transactions PDF
+                        <i className="fas fa-download"></i> Download PDF
                     </button>
                 </div>
 
                 {error && <div className="error" style={{ marginBottom: '15px' }}>{error}</div>}
 
                 <div className="table-container">
-                    {filteredTransactions.length === 0 ? (
+                    {sortedTransactions.length === 0 ? (
                         <p className="empty-state">No transactions found</p>
                     ) : (
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Date & Time</th>
-                                    <th>Transaction ID</th>
-                                    <th style={{ textAlign: 'center' }}>Total Items</th>
-                                    <th style={{ textAlign: 'right' }}>Total Amount</th>
-                                    <th style={{ textAlign: 'center' }}>Receipt</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredTransactions.map((t) => (
-                                    <tr key={t.id}>
-                                        <td>{formatDate(t.timestamp || t.created_at)}</td>
-                                        <td><strong>{t.transaction_id}</strong></td>
-                                        <td style={{ textAlign: 'center' }}>{getTotalItems(t.items)}</td>
-                                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(t.total_amount)}</td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <button
-                                                className="btn btn-primary"
-                                                style={{ padding: '5px 10px', fontSize: '0.85rem' }}
-                                                onClick={() => handleViewTransaction(t)}
-                                            >
-                                                <i className="fas fa-eye"></i> View
-                                            </button>
-                                        </td>
+                        <>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th className="sortable-th" onClick={() => handleSort('timestamp')}>
+                                            Date & Time <i className={getSortIcon('timestamp')}></i>
+                                        </th>
+                                        <th className="sortable-th" onClick={() => handleSort('transaction_id')}>
+                                            Transaction ID <i className={getSortIcon('transaction_id')}></i>
+                                        </th>
+                                        <th className="sortable-th" style={{ textAlign: 'center' }} onClick={() => handleSort('items')}>
+                                            Total Items <i className={getSortIcon('items')}></i>
+                                        </th>
+                                        <th className="sortable-th" style={{ textAlign: 'right' }} onClick={() => handleSort('total_amount')}>
+                                            Total Amount <i className={getSortIcon('total_amount')}></i>
+                                        </th>
+                                        <th style={{ textAlign: 'center' }}>Actions</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {paginatedTransactions.map((t) => (
+                                        <tr key={t.id}>
+                                            <td>{formatDate(t.timestamp || t.created_at)}</td>
+                                            <td><strong>{t.transaction_id}</strong></td>
+                                            <td style={{ textAlign: 'center' }}>{getTotalItems(t.items)}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(t.total_amount)}</td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <button
+                                                    className="btn btn-primary"
+                                                    style={{ padding: '5px 10px', fontSize: '0.85rem' }}
+                                                    onClick={() => handleViewTransaction(t)}
+                                                >
+                                                    <i className="fas fa-eye"></i> View
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className="txn-pagination">
+                                    <span className="txn-pagination-info">
+                                        Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, sortedTransactions.length)} of {sortedTransactions.length}
+                                    </span>
+                                    <div className="txn-pagination-controls">
+                                        <button
+                                            className="txn-page-btn"
+                                            disabled={currentPage === 1}
+                                            onClick={() => setCurrentPage(1)}
+                                            title="First page"
+                                        >
+                                            <i className="fas fa-angles-left"></i>
+                                        </button>
+                                        <button
+                                            className="txn-page-btn"
+                                            disabled={currentPage === 1}
+                                            onClick={() => setCurrentPage(prev => prev - 1)}
+                                        >
+                                            <i className="fas fa-chevron-left"></i>
+                                        </button>
+                                        {getPageNumbers().map((page, idx) => (
+                                            page === '...' ? (
+                                                <span key={`ellipsis-${idx}`} className="txn-page-ellipsis">…</span>
+                                            ) : (
+                                                <button
+                                                    key={page}
+                                                    className={`txn-page-btn ${currentPage === page ? 'active' : ''}`}
+                                                    onClick={() => setCurrentPage(page)}
+                                                >
+                                                    {page}
+                                                </button>
+                                            )
+                                        ))}
+                                        <button
+                                            className="txn-page-btn"
+                                            disabled={currentPage === totalPages}
+                                            onClick={() => setCurrentPage(prev => prev + 1)}
+                                        >
+                                            <i className="fas fa-chevron-right"></i>
+                                        </button>
+                                        <button
+                                            className="txn-page-btn"
+                                            disabled={currentPage === totalPages}
+                                            onClick={() => setCurrentPage(totalPages)}
+                                            title="Last page"
+                                        >
+                                            <i className="fas fa-angles-right"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
