@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { salesAPI, productsAPI, deliveriesAPI } from '../services/api';
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState(null);
   const [recentSales, setRecentSales] = useState([]);
   const [products, setProducts] = useState([]);
@@ -110,6 +112,15 @@ function Dashboard() {
     return pages;
   };
 
+  const handleScrollToSection = (sectionId) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      // Calculate top position with some offset for the sticky header
+      const y = element.getBoundingClientRect().top + window.scrollY - 80;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
   if (loading) {
     return <div className="loading">Loading dashboard...</div>;
   }
@@ -127,27 +138,27 @@ function Dashboard() {
 
       {/* Stats Cards - 6 cards */}
       <div className="stats-grid">
-        <div className="stat-card">
+        <div className="stat-card clickable-card" onClick={() => navigate('/reports')}>
           <h3><i className="fas fa-peso-sign" style={{ color: '#ffffff' }}></i> Today's Sales</h3>
           <p className="stat-value">{formatCurrency(dashboardData?.business_health?.total_revenue || 0)}</p>
         </div>
-        <div className="stat-card">
+        <div className="stat-card clickable-card" onClick={() => navigate('/transactions')}>
           <h3><i className="fas fa-receipt" style={{ color: '#3b82f6' }}></i> Transactions</h3>
           <p className="stat-value">{dashboardData?.business_health?.total_transactions || 0}</p>
         </div>
-        <div className="stat-card">
+        <div className="stat-card clickable-card" onClick={() => navigate('/reports')}>
           <h3><i className="fas fa-calendar-alt" style={{ color: '#9b59b6' }}></i> Monthly Sales</h3>
           <p className="stat-value">{formatCurrency(dashboardData?.month_sales?.total_revenue || 0)}</p>
         </div>
-        <div className="stat-card">
+        <div className="stat-card clickable-card" onClick={() => navigate('/reports')}>
           <h3><i className="fas fa-chart-line" style={{ color: '#2ecc71' }}></i> Yearly Sales</h3>
           <p className="stat-value">{formatCurrency(dashboardData?.year_sales?.total_revenue || 0)}</p>
         </div>
-        <div className="stat-card">
+        <div className="stat-card clickable-card" onClick={() => handleScrollToSection('low-stock-section')}>
           <h3><i className="fas fa-exclamation-triangle" style={{ color: '#e74c3c' }}></i> Low Stock</h3>
           <p className="stat-value">{dashboardData?.inventory_alerts?.low_stock_count || 0}</p>
         </div>
-        <div className="stat-card">
+        <div className="stat-card clickable-card" onClick={() => handleScrollToSection('upcoming-deliveries-section')}>
           <h3><i className="fas fa-clock" style={{ color: '#f39c12' }}></i> Pending Deliveries</h3>
           <p className="stat-value">{dashboardData?.pending_deliveries?.count || 0}</p>
         </div>
@@ -270,7 +281,7 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="dashboard-section">
+        <div className="dashboard-section" id="upcoming-deliveries-section">
           <h2>Upcoming Deliveries</h2>
           <div className="table-container">
             {upcomingDeliveries.filter(d => d.status === 'PENDING').length === 0 ? (
@@ -298,7 +309,7 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="dashboard-section">
+        <div className="dashboard-section" id="low-stock-section">
           <h2>Low Stock Alerts</h2>
           <div className="table-container">
             {(() => {
