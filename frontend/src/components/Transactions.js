@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { salesAPI } from '../services/api';
+import { salesAPI, API_BASE_URL } from '../services/api';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
@@ -239,8 +239,7 @@ function Transactions() {
 
     const handleDownloadReceipt = (transactionId) => {
         try {
-            const API_URl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-            window.open(`${API_URl}/sales/receipt/pdf/${transactionId}/`, '_blank');
+            window.open(`${API_BASE_URL}/sales/receipt/pdf/${transactionId}/`, '_blank');
         } catch (error) {
             console.error("Could not open receipt", error);
         }
