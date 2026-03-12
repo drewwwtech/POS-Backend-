@@ -196,7 +196,8 @@ def generate_receipt(request, transaction_id):
     p.setFont("Helvetica", 12)
     p.drawString(100, 780, f"Transaction: {sale.transaction_id}")
     # Localized timestamp formatting
-    p.drawString(100, 760, f"Date: {sale.timestamp.strftime('%Y-%m-%d %H:%M')}")
+    local_time = timezone.localtime(sale.timestamp)
+    p.drawString(100, 760, f"Date: {local_time.strftime('%Y-%m-%d %H:%M')}")
     p.line(100, 750, 500, 750)
     
     y = 730
@@ -608,7 +609,8 @@ def generate_daily_report_pdf(request):
             p.showPage()
             y = 800
             
-        p.drawString(100, y, f"{sale.timestamp.strftime('%H:%M')} - {sale.transaction_id} - PHP {sale.total_amount:,.2f}")
+        local_time = timezone.localtime(sale.timestamp)
+        p.drawString(100, y, f"{local_time.strftime('%H:%M')} - {sale.transaction_id} - PHP {sale.total_amount:,.2f}")
         y -= 15
         
     p.showPage()

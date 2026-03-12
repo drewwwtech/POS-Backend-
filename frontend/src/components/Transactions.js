@@ -237,11 +237,21 @@ function Transactions() {
         doc.save(fileName);
     };
 
-    const handleDownloadReceipt = (transactionId) => {
+    const handleDownloadReceipt = async (transactionId) => {
         try {
-            window.open(`${API_BASE_URL}/sales/receipt/pdf/${transactionId}/`, '_blank');
+            const response = await salesAPI.getReceiptPDF(transactionId);
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `receipt_${transactionId}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
         } catch (error) {
-            console.error("Could not open receipt", error);
+            console.error("Could not download receipt", error);
+            alert("Failed to download receipt PDF.");
         }
     };
 

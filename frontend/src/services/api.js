@@ -63,6 +63,7 @@ export const salesAPI = {
   getMonthlyReportPDF: (year, month) => api.get('/sales/report/monthly/pdf/', { params: { year, month }, responseType: 'blob' }),
   getYearlyReportPDF: (year) => api.get('/sales/report/yearly/pdf/', { params: { year }, responseType: 'blob' }),
   getRangeReportPDF: (start, end) => api.get('/sales/report/range/pdf/', { params: { start, end }, responseType: 'blob' }),
+  getReceiptPDF: (transactionId) => api.get(`/sales/receipt/pdf/${transactionId}/`, { responseType: 'blob' }),
 };
 
 // Deliveries API
