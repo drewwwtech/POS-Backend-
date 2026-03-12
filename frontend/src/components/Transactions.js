@@ -513,7 +513,7 @@ function Transactions() {
                                         <th>Product</th>
                                         <th style={{ textAlign: 'center' }}>Qty</th>
                                         <th style={{ textAlign: 'right' }}>Unit Price</th>
-                                        <th style={{ textAlign: 'right' }}>Subtotal</th>
+                                        <th style={{ textAlign: 'right' }}>Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>

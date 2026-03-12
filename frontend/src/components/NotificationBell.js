@@ -6,20 +6,39 @@ function NotificationBell() {
     // Accumulated notifications — merges new ones with existing, never removes
     const [notifications, setNotifications] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
-    const [readIds, setReadIds] = useState(new Set());
+
+    // Load readIds from localStorage on init
+    const [readIds, setReadIds] = useState(() => {
+        const saved = localStorage.getItem('jmc_notifications_read');
+        return saved ? new Set(JSON.parse(saved)) : new Set();
+    });
+
+    // Load clearedIds from localStorage on init
+    const [clearedIds, setClearedIds] = useState(() => {
+        const saved = localStorage.getItem('jmc_notifications_cleared');
+        return saved ? new Set(JSON.parse(saved)) : new Set();
+    });
+
     const [showAll, setShowAll] = useState(false);
     const dropdownRef = useRef(null);
     const navigate = useNavigate();
     const location = useLocation();
     const readIdsRef = useRef(readIds);
+    const clearedIdsRef = useRef(clearedIds);
     const seenIdsRef = useRef(new Set());
 
     const DISPLAY_LIMIT = 20;
 
-    // Keep ref in sync
+    // Keep refs in sync and persist to localStorage
     useEffect(() => {
         readIdsRef.current = readIds;
+        localStorage.setItem('jmc_notifications_read', JSON.stringify(Array.from(readIds)));
     }, [readIds]);
+
+    useEffect(() => {
+        clearedIdsRef.current = clearedIds;
+        localStorage.setItem('jmc_notifications_cleared', JSON.stringify(Array.from(clearedIds)));
+    }, [clearedIds]);
 
     const fetchNotifications = useCallback(async () => {
         try {
@@ -105,13 +124,20 @@ function NotificationBell() {
     const handleMarkAllRead = (e) => {
         e.stopPropagation();
         const allIds = notifications.map(n => n.id);
-        setReadIds(new Set(allIds));
+        const newReadSet = new Set(readIds);
+        allIds.forEach(id => newReadSet.add(id));
+        setReadIds(newReadSet);
     };
 
     const handleClearRead = (e) => {
         e.stopPropagation();
-        // Remove all read + resolved notifications, keep only unread ones
-        setNotifications(prev => prev.filter(n => !readIds.has(n.id)));
+        // Mark all currently read notifications as cleared
+        const currentlyRead = notifications.filter(n => readIds.has(n.id)).map(n => n.id);
+        setClearedIds(prev => {
+            const next = new Set(prev);
+            currentlyRead.forEach(id => next.add(id));
+            return next;
+        });
     };
 
     const getSeverityColor = (severity) => {
@@ -123,7 +149,11 @@ function NotificationBell() {
         }
     };
 
-    const unreadCount = notifications.filter(n => !readIds.has(n.id)).length;
+    // Filter out notifications that have been "cleared" by the user
+    // We also want to keep the total list in memory for the "Show all" logic
+    // but the default lists should be filtered.
+    const activeNotifications = notifications.filter(n => !clearedIds.has(n.id));
+    const unreadCount = activeNotifications.filter(n => !readIds.has(n.id)).length;
 
     const formatTimestamp = (ts) => {
         if (!ts) return '';
@@ -142,8 +172,8 @@ function NotificationBell() {
         }
     };
 
-    const displayedNotifications = showAll ? notifications : notifications.slice(0, DISPLAY_LIMIT);
-    const hasMore = notifications.length > DISPLAY_LIMIT;
+    const displayedNotifications = showAll ? activeNotifications : activeNotifications.slice(0, DISPLAY_LIMIT);
+    const hasMore = activeNotifications.length > DISPLAY_LIMIT;
 
     return (
         <div className="notification-bell-container" ref={dropdownRef}>
@@ -161,14 +191,14 @@ function NotificationBell() {
             {isOpen && (
                 <div className="notification-dropdown">
                     <div className="notification-dropdown-header">
-                        <h4>Notifications {notifications.length > 0 && <span className="notification-count">({notifications.length})</span>}</h4>
+                        <h4>Notifications {activeNotifications.length > 0 && <span className="notification-count">({activeNotifications.length})</span>}</h4>
                         <div className="notification-header-actions">
                             {unreadCount > 0 && (
                                 <button className="notification-mark-read" onClick={handleMarkAllRead}>
                                     Mark all read
                                 </button>
                             )}
-                            {notifications.some(n => readIds.has(n.id)) && (
+                            {activeNotifications.some(n => readIds.has(n.id)) && (
                                 <button className="notification-mark-read" onClick={handleClearRead}>
                                     Clear read
                                 </button>
@@ -177,7 +207,7 @@ function NotificationBell() {
                     </div>
 
                     <div className="notification-dropdown-body">
-                        {notifications.length === 0 ? (
+                        {activeNotifications.length === 0 ? (
                             <div className="notification-empty">
                                 <i className="fas fa-check-circle"></i>
                                 <p>You're all caught up!</p>
@@ -223,7 +253,7 @@ function NotificationBell() {
                                 className="notification-show-more"
                                 onClick={(e) => { e.stopPropagation(); setShowAll(!showAll); }}
                             >
-                                {showAll ? 'Show less' : `Show all (${notifications.length})`}
+                                {showAll ? 'Show less' : `Show all (${activeNotifications.length})`}
                             </button>
                         </div>
                     )}
