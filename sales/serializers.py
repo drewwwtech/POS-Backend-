@@ -43,6 +43,10 @@ class SaleSerializer(serializers.ModelSerializer):
 
         items_data = validated_data.pop('items')
         
+        # Reset total_amount to 0 to prevent double-counting
+        # The post_save signal in models.py will calculate the correct total from items
+        validated_data['total_amount'] = Decimal('0.00')
+        
         # Pre-validate stock availability
         for item_data in items_data:
             product = item_data.get('product')
